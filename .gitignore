@@ -1,0 +1,22 @@
+# ROS2 generated folders
+build/
+install/
+log/
+
+# External cloned packages / dependencies
+src/stonefish_ros2/
+src/stonefish_bluerov2/
+src/mola_auv_sim/
+
+# Python
+__pycache__/
+*.pyc
+
+# OS/editor junk
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Blender backup files
+*.blend1
+*.blend2
