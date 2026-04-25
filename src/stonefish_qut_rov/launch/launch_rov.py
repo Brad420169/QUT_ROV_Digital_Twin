@@ -18,7 +18,7 @@ def generate_launch_description():
                 'simulation_data': pkg_dir,
                 'scenario_desc': pkg_dir + f'/scenarios/{ENVIRONMENT}.scn',
                 'simulation_rate': '100.0',
-                'window_res_x': '1600',
+                'window_res_x': '920',
                 'window_res_y': '1000',
                 'rendering_quality': 'high',
             }.items()

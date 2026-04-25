@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <scenario>
-
+<!-- 
 	<environment>
 		<ned latitude="56.136459" longitude="-2.706819"/>
 		<ocean>
@@ -19,7 +19,23 @@
 		<atmosphere>
 			<sun azimuth="45.0" elevation="90.0"/>
 		</atmosphere>
-	</environment>
+	</environment> -->
+
+
+<!-- DISABLED ANY CURRENT FORCES -->
+    <environment>
+        <ned latitude="56.136459" longitude="-2.706819"/>
+
+        <ocean>
+            <water density="1031.0" jerlov="0.15"/>
+            <waves height="0.0"/>
+            <particles enabled="false"/>
+        </ocean>
+
+        <atmosphere>
+            <sun azimuth="45.0" elevation="90.0"/>
+        </atmosphere>
+    </environment>
 
     <materials>
         <material name="HullMat" density="1000.0" restitution="0.3"/>
@@ -135,10 +151,12 @@
 		<world_transform rpy="0.0 1.57 1.57" xyz="-4.0 0.0 5.3"/>
 	</static>
 
-    <!-- not sure if i defined the include correctly -->
-    <include file="$(find stonefish_qut_rov)/scenarios/full_mesh_only_rov.scn">
+    <!-- change each line for using the fullmesh robot or defined in parts robot -->
+    <!-- <include file="$(find stonefish_qut_rov)/scenarios/full_mesh_only_rov.scn"> -->
+	<include file="$(find stonefish_qut_rov)/scenarios/qut_rov_from_assembly_file.scn">
+    <!-- <include file="$(find stonefish_qut_rov)/scenarios/rov_in_parts_rov_only.scn"> -->
         <arg name="vehicle_name" value="qut_rov"/>
-        <arg name="position" value="0.0 0.0 0.5"/>
+        <arg name="position" value="0.0 0.0 5.1"/>
         <arg name="orientation" value="0.0 0.0 0.0"/>
 	</include>
 
