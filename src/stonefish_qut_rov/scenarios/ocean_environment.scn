@@ -152,9 +152,10 @@
 	</static>
 
     <!-- change each line for using the fullmesh robot or defined in parts robot -->
-    <!-- <include file="$(find stonefish_qut_rov)/scenarios/full_mesh_only_rov.scn"> -->
-	<include file="$(find stonefish_qut_rov)/scenarios/qut_rov_from_assembly_file.scn">
-    <!-- <include file="$(find stonefish_qut_rov)/scenarios/rov_in_parts_rov_only.scn"> -->
+    <!-- <include file="$(find stonefish_qut_rov)/scenarios/rov_mesh_only.scn"> -->
+    <!-- <include file="scenarios/stable_but_unrealistic.scn"> -->
+	<include file="$(find stonefish_qut_rov)/scenarios/josh_updated_rov.scn">
+
         <arg name="vehicle_name" value="qut_rov"/>
         <arg name="position" value="0.0 0.0 5.1"/>
         <arg name="orientation" value="0.0 0.0 0.0"/>

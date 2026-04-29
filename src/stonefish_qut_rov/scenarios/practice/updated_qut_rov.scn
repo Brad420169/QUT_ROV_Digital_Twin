@@ -23,12 +23,12 @@
 
             <external_part name="Hull" type="model" physics="submerged" buoyant="false">
                 <physical>
-                    <mesh filename="/home/brad/Desktop/EGH490/ros2_ws/src/stonefish_qut_rov/cad_model_data/Updated_full_assembly_phy.obj" scale="1.0"/>
+                    <mesh filename="cad_model_data/rov_models/Updated_full_assembly_phy.obj" scale="1.0"/>
                     <origin xyz="0 0 0" rpy="0 0 0"/>
-                    <thickness value="0.005"/>
+                    <thickness value="0.004"/>
                 </physical>
                 <visual>
-                    <mesh filename="/home/brad/Desktop/EGH490/ros2_ws/src/stonefish_qut_rov/cad_model_data/Updated_full_assembly_vis.obj" scale="1.0"/>
+                    <mesh filename="cad_model_data/rov_models/25k_N_hole.obj" scale="1.0"/>
                     <origin xyz="0 0 0" rpy="0 0 0"/>
                 </visual>
                 <material name="HullMat"/>
@@ -39,7 +39,7 @@
 
             <internal_part name="FoamLeft" type="box" physics="submerged" buoyant="true">
                 <dimensions xyz="0.24 0.06 0.05"/>
-                <origin xyz="0 0 0" rpy="0 0 0"/>
+                <origin xyz="0 0 0" rpy="-0.7854 0 0"/>
                 <material name="FoamMat"/>
                 <look name="foam"/>
                 <mass value="0.0612"/>
@@ -48,7 +48,7 @@
 
             <internal_part name="FoamRight" type="box" physics="submerged" buoyant="true">
                 <dimensions xyz="0.24 0.06 0.05"/>
-                <origin xyz="0 0 0" rpy="0 0 0"/>
+                <origin xyz="0 0 0" rpy="0.7854 0 0"/>
                 <material name="FoamMat"/>
                 <look name="foam"/>
                 <mass value="0.0612"/>
@@ -106,46 +106,74 @@
         <!-- Current xyz uses thruster COM as a starter placeholder -->
         <!-- Replace with prop/axis center later -->
 
-        <actuator name="Thruster_TL" type="thruster">
+        <!-- Thruster TL -->
+        <actuator name="TL" type="thruster">
             <link name="base_link"/>
-            <origin xyz="0.00201 -0.14498 0.00905" rpy="0 0 0.7853981634"/>
-            <specs thrust_coeff="0.020" torque_coeff="0.002" max_rpm="8000.0" inverted="false"/>
+            <origin xyz="0.00201 -0.14498 0.00905" rpy="0 -1.5708 0"/>
+            <specs max_setpoint="3600.0" inverted_setpoint="false" normalized_setpoint="false"/>
+            <rotor_dynamics type="zero_order"/>
+            <thrust_model type="fluid_dynamics">
+                <rotor_constant value="0.001"/>
+                <thrust_coeff forward="0.043" reverse="0.043"/>
+                <torque_coeff value="0.004"/>
+            </thrust_model>
             <propeller diameter="0.077" right="false">
-                <mesh filename="/home/brad/Desktop/EGH490/ros2_ws/src/stonefish_qut_rov/cad_model_data/ccw.obj" scale="1.0"/>
-                <material name="ElectronicsMat"/>
+                <mesh filename="cad_model_data/ccw.obj" scale="1.0"/>
+                <material name="Neutral"/>
                 <look name="thruster"/>
             </propeller>
         </actuator>
 
-        <actuator name="Thruster_TR" type="thruster">
+        <!-- Thruster TR -->
+        <actuator name="TR" type="thruster">
             <link name="base_link"/>
-            <origin xyz="0.00257 0.14631 0.00925" rpy="0 0 -0.7853981634"/>
-            <specs thrust_coeff="0.020" torque_coeff="0.002" max_rpm="8000.0" inverted="false"/>
-            <propeller diameter="0.077" right="false">
-                <mesh filename="/home/brad/Desktop/EGH490/ros2_ws/src/stonefish_qut_rov/cad_model_data/cw.obj" scale="1.0"/>
-                <material name="ElectronicsMat"/>
-                <look name="thruster"/>
-            </propeller>
-        </actuator>
-
-        <actuator name="Thruster_BL" type="thruster">
-            <link name="base_link"/>
-            <origin xyz="-0.08625 -0.13998 0.00651" rpy="0 0 2.3561944902"/>
-            <specs thrust_coeff="0.020" torque_coeff="0.002" max_rpm="8000.0" inverted="false"/>
-            <propeller diameter="0.077" right="false">
-                <mesh filename="/home/brad/Desktop/EGH490/ros2_ws/src/stonefish_qut_rov/cad_model_data/cw.obj" scale="1.0"/>
-                <material name="ElectronicsMat"/>
-                <look name="thruster"/>
-            </propeller>
-        </actuator>
-
-        <actuator name="Thruster_BR" type="thruster">
-            <link name="base_link"/>
-            <origin xyz="-0.08569 0.14131 0.00771" rpy="0 0 -2.3561944902"/>
-            <specs thrust_coeff="0.020" torque_coeff="0.002" max_rpm="8000.0" inverted="false"/>
+            <origin xyz="0.00257 0.14631 0.00925" rpy="0 -1.5708 0"/>
+            <specs max_setpoint="3600.0" inverted_setpoint="true" normalized_setpoint="false"/>
+            <rotor_dynamics type="zero_order"/>
+            <thrust_model type="fluid_dynamics">
+                <rotor_constant value="0.001"/>
+                <thrust_coeff forward="0.043" reverse="0.043"/>
+                <torque_coeff value="0.004"/>
+            </thrust_model>
             <propeller diameter="0.077" right="true">
-                <mesh filename="/home/brad/Desktop/EGH490/ros2_ws/src/stonefish_qut_rov/cad_model_data/ccw.obj" scale="1.0"/>
-                <material name="ElectronicsMat"/>
+                <mesh filename="cad_model_data/cw.obj" scale="1.0"/>
+                <material name="Neutral"/>
+                <look name="thruster"/>
+            </propeller>
+        </actuator>
+
+        <!-- Thruster BL -->
+        <actuator name="BL" type="thruster">
+            <link name="base_link"/>
+            <origin xyz="-0.08625 -0.13998 0.00651" rpy="0.0 0.0 0.0"/>
+            <specs max_setpoint="3600.0" inverted_setpoint="false" normalized_setpoint="false"/>
+            <rotor_dynamics type="zero_order"/>
+            <thrust_model type="fluid_dynamics">
+                <rotor_constant value="0.001"/>
+                <thrust_coeff forward="0.043" reverse="0.043"/>
+                <torque_coeff value="0.004"/>
+            </thrust_model>
+            <propeller diameter="0.077" right="true">
+                <mesh filename="cad_model_data/cw.obj" scale="1.0"/>
+                <material name="Neutral"/>
+                <look name="thruster"/>
+            </propeller>
+        </actuator>
+
+        <!-- Thruster BR -->
+        <actuator name="BR" type="thruster">
+            <link name="base_link"/>
+            <origin xyz="-0.08569 0.14131 0.00771" rpy="0.0 0.0 0.0"/>
+            <specs max_setpoint="3600.0" inverted_setpoint="true" normalized_setpoint="false"/>
+            <rotor_dynamics type="zero_order"/>
+            <thrust_model type="fluid_dynamics">
+                <rotor_constant value="0.001"/>
+                <thrust_coeff forward="0.043" reverse="0.043"/>
+                <torque_coeff value="0.004"/>
+            </thrust_model>
+            <propeller diameter="0.077" right="false">
+                <mesh filename="cad_model_data/ccw.obj" scale="1.0"/>
+                <material name="Neutral"/>
                 <look name="thruster"/>
             </propeller>
         </actuator>

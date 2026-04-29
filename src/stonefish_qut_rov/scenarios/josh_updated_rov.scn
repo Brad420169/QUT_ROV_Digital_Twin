@@ -9,32 +9,46 @@
         <look name="camera" rgb="0.10 0.10 0.10" roughness="0.40"/>
     </looks>
 
+    <!-- <dynamic name="center_of_mass" type="sphere" physics="submerged" buoyant="false">
+        <dimensions radius="0.025"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <material name="HullMat"/>
+        <look name="rov_body"/>
+        <mass value="4.417"/>
+        <inertia ixx="0.03" iyy="0.03" izz="0.045"/>
+        <cg xyz="-0.00685 0.00011 -0.00005"/>
+        <world_transform xyz="$(arg position)" rpy="$(arg orientation)"/>
+    </dynamic> -->
+
     <robot name="$(arg vehicle_name)" fixed="false" self_collisions="false">
 
-        <base_link name="base_link" type="compound" physics="submerged">
+        <base_link name="base_link" type="model" physics="submerged">
 
         <!-- Main hull -->
-        <external_part name="Hull" type="model" physics="submerged" buoyant="true">
             <physical>
-                <mesh filename="cad_model_data/rov_models/2k_N_hole.obj" scale="1.0"/>
+                <mesh filename="cad_model_data/rov_models/2k_updated_Subbyrov.obj" scale="1.0"/>
                 <origin rpy="0.0 0.0 0.0" xyz="0 0.0 0.0"/>
+                <!-- <thickness value="0.0087"/> -->
             </physical>
+
             <visual>
-                <mesh filename="cad_model_data/rov_models/25k_N_hole.obj" scale="1.0"/>
+                <mesh filename="cad_model_data/rov_models/updated_Subbyrov.obj" scale="1.0"/>
                 <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0"/>
             </visual>
+
             <material name="HullMat"/>
             <look name="rov_body"/>
-            <mass value="4.088"/>
-            <compound_transform xyz="0 0 0" rpy="0 0 0"/>
-        </external_part> 
-
+            <mass value="4.417"/>
+            <inertia xyz="0.03 0.036 0.0535"/>
+            <cg xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0"/>
+            <!-- <cg xyz="0.002 0.00011 -0.00005" rpy="0.0 0.0 0.0"/> -->
         </base_link>
+
 
         <!-- Thruster TL -->
         <actuator name="TL" type="thruster">
             <link name="base_link"/>
-            <origin xyz="0.00201 -0.14498 0.00905" rpy="0 -1.5708 0"/>
+            <origin xyz="0.0026 -0.145 0.00914" rpy="0 -1.5708 0"/>
             <specs max_setpoint="3600.0" inverted_setpoint="false" normalized_setpoint="false"/>
             <rotor_dynamics type="zero_order"/>
             <thrust_model type="fluid_dynamics">
@@ -52,7 +66,7 @@
         <!-- Thruster TR -->
         <actuator name="TR" type="thruster">
             <link name="base_link"/>
-            <origin xyz="0.00257 0.14631 0.00925" rpy="0 -1.5708 0"/>
+            <origin xyz="0.0026 0.145 0.00914" rpy="0 -1.5708 0"/>
             <specs max_setpoint="3600.0" inverted_setpoint="true" normalized_setpoint="false"/>
             <rotor_dynamics type="zero_order"/>
             <thrust_model type="fluid_dynamics">
@@ -70,7 +84,7 @@
         <!-- Thruster BL -->
         <actuator name="BL" type="thruster">
             <link name="base_link"/>
-            <origin xyz="-0.08625 -0.13998 0.00651" rpy="0.0 0.0 0.0"/>
+            <origin xyz="-0.09735 -0.140 0.0066" rpy="0.0 0.0 0.0"/>
             <specs max_setpoint="3600.0" inverted_setpoint="false" normalized_setpoint="false"/>
             <rotor_dynamics type="zero_order"/>
             <thrust_model type="fluid_dynamics">
@@ -88,7 +102,7 @@
         <!-- Thruster BR -->
         <actuator name="BR" type="thruster">
             <link name="base_link"/>
-            <origin xyz="-0.08569 0.14131 0.00771" rpy="0.0 0.0 0.0"/>
+            <origin xyz="-0.09735 0.140 0.0066" rpy="0.0 0.0 0.0"/>
             <specs max_setpoint="3600.0" inverted_setpoint="true" normalized_setpoint="false"/>
             <rotor_dynamics type="zero_order"/>
             <thrust_model type="fluid_dynamics">
@@ -136,6 +150,7 @@
         <ros_subscriber thrusters="/$(arg vehicle_name)/setpoint/pwm"/>
 
     </robot>
+
 
 </scenario>
 

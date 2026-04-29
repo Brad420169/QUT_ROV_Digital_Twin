@@ -15,7 +15,7 @@
 
             <external_part name="Hull" type="model" physics="submerged" buoyant="false">
                 <physical>
-                    <mesh filename="cad_model_data/rov_models/8k_no_holes_blender.obj" scale="1.0"/>
+                    <mesh filename="cad_model_data/rov_models/2k_N_hole.obj" scale="1.0"/>
                     <origin rpy="0.0 0.0 0.0" xyz="0 0.0 0.0"/>
                     <!-- <thickness value="0.005"/> -->
                 </physical>
@@ -25,7 +25,7 @@
                 </visual>
                 <material name="HullMat"/>
                 <look name="rov_body"/>
-                <mass value="1.7126"/>
+                <mass value="1.4126"/>
                 <compound_transform xyz="0 0 0" rpy="0 0 0"/>
             </external_part>
 

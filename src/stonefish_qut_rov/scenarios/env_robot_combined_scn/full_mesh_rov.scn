@@ -181,12 +181,12 @@
 
         <external_part name="Hull" type="model" physics="submerged" buoyant="true">
             <physical>
-                <mesh filename="/home/brad/Desktop/EGH490/ros2_ws/src/stonefish_qut_rov/cad_model_data/rov_models/8k_no_holes_blender.obj" scale="1.0"/>
+                <mesh filename="/home/brad/Desktop/EGH490/ros2_ws/src/stonefish_qut_rov/cad_model_data/rov_models/2k_N_hole.obj" scale="1.0"/>
                 <origin rpy="0.0 0.0 0.0" xyz="0 0.0 0.0"/>
                 <!-- <thickness value="0.005"/> -->
             </physical>
             <visual>
-                <mesh filename="/home/brad/Desktop/EGH490/ros2_ws/src/stonefish_qut_rov/cad_model_data/rov_models/8k_no_holes_blender.obj" scale="1.0"/>
+                <mesh filename="/home/brad/Desktop/EGH490/ros2_ws/src/stonefish_qut_rov/cad_model_data/rov_models/25k_N_hole.obj" scale="1.0"/>
                 <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0"/>
             </visual>
             <material name="HullMat"/>

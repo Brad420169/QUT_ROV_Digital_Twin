@@ -15,7 +15,7 @@ class Teleop(Node):
         self.pub = self.create_publisher(Float64MultiArray, '/qut_rov/setpoint/pwm', 10)
         self.timer = self.create_timer(0.05, self.timer_callback)  # 20 Hz
 
-        self.pwm = 500.0
+        self.pwm = 600.0
         self.thrust = [0.0, 0.0, 0.0, 0.0]
 
         self.old_terminal_settings = termios.tcgetattr(sys.stdin)
@@ -24,8 +24,10 @@ class Teleop(Node):
         print("Controls (TOGGLE MODE):")
         print("  w = forward")
         print("  s = backward")
-        print("  a = up")
-        print("  d = down")
+        print("  a = left")
+        print("  d = right")
+        print("  q = up")
+        print("  e = down")
         print("  space = stop")
         print("  x = exit")
         print("")
@@ -49,10 +51,19 @@ class Teleop(Node):
                 print("Backward", flush=True)
 
             elif key == 'a':
+                self.thrust = [0.0, 0.0, 0.5*self.pwm, self.pwm]
+                print("Left", flush=True)
+
+            elif key == 'd':
+                self.thrust = [0.0, 0.0, self.pwm, 0.5*self.pwm]
+                print("Right", flush=True)
+
+
+            elif key == 'q':
                 self.thrust = [self.pwm, self.pwm, 0.0, 0.0]
                 print("Up", flush=True)
 
-            elif key == 'd':
+            elif key == 'e':
                 self.thrust = [-self.pwm, -self.pwm, 0.0, 0.0]
                 print("Down", flush=True)
 
