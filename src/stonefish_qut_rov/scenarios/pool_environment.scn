@@ -80,11 +80,11 @@
     </static>
 
     <!-- Include your ROV -->
-    <include file="scenarios/stable_but_unrealistic.scn">
+    <!-- <include file="scenarios/stable_but_unrealistic.scn"> -->
 
 
     
-    <!-- <include file="$(find stonefish_qut_rov)/scenarios/rov_mesh_only.scn"> -->
+    <include file="$(find stonefish_qut_rov)/scenarios/main_rov.scn">
         <arg name="vehicle_name" value="qut_rov"/>
         <arg name="position" value="0.0 0.0 0.5"/>
         <arg name="orientation" value="0.0 0.0 0.0"/>
