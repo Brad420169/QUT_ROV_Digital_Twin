@@ -12,10 +12,10 @@ from std_msgs.msg import Float64MultiArray
 class Teleop(Node):
     def __init__(self):
         super().__init__('teleop')
-        self.pub = self.create_publisher(Float64MultiArray, '/qut_rov/setpoint/pwm', 10)
+        self.pub = self.create_publisher(Float64MultiArray, '/qut_rov/setpoint/thrusters', 10)
         self.timer = self.create_timer(0.05, self.timer_callback)  # 20 Hz
 
-        self.pwm = 600.0
+        self.thruster_cmd =600.0  # 100% throttle
         self.thrust = [0.0, 0.0, 0.0, 0.0]
 
         self.old_terminal_settings = termios.tcgetattr(sys.stdin)
@@ -43,28 +43,28 @@ class Teleop(Node):
 
         if key is not None:
             if key == 'w':
-                self.thrust = [0.0, 0.0, self.pwm, self.pwm]
+                self.thrust = [0.0, 0.0, self.thruster_cmd, self.thruster_cmd]
                 print("Forward", flush=True)
 
             elif key == 's':
-                self.thrust = [0.0, 0.0, -self.pwm, -self.pwm]
+                self.thrust = [0.0, 0.0, -self.thruster_cmd, -self.thruster_cmd]
                 print("Backward", flush=True)
 
             elif key == 'a':
-                self.thrust = [0.0, 0.0, 0.5*self.pwm, self.pwm]
+                self.thrust = [0.0, 0.0, 0.5*self.thruster_cmd, self.thruster_cmd]
                 print("Left", flush=True)
 
             elif key == 'd':
-                self.thrust = [0.0, 0.0, self.pwm, 0.5*self.pwm]
+                self.thrust = [0.0, 0.0, self.thruster_cmd, 0.5*self.thruster_cmd]
                 print("Right", flush=True)
 
 
             elif key == 'q':
-                self.thrust = [self.pwm, self.pwm, 0.0, 0.0]
+                self.thrust = [self.thruster_cmd, self.thruster_cmd, 0.0, 0.0]
                 print("Up", flush=True)
 
             elif key == 'e':
-                self.thrust = [-self.pwm, -self.pwm, 0.0, 0.0]
+                self.thrust = [-self.thruster_cmd, -self.thruster_cmd, 0.0, 0.0]
                 print("Down", flush=True)
 
             elif key == ' ':
