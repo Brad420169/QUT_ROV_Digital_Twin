@@ -1,0 +1,136 @@
+<?xml version="1.0"?>
+<scenario>
+
+    <!--
+        Yellow Tang model and texture.
+
+        Remove yellow_tang_look from the main environment file if it is
+        defined here, because each look name should only be defined once.
+    -->
+    <looks>
+        <look name="yellow_tang_look"
+              gray="1.0"
+              roughness="0.4"
+              metalness="0.0"
+              texture="cad_model_data/yellow_tang_look.png"/>
+
+        <look name="fish_thruster"
+              rgb="0.05 0.05 0.05"
+              roughness="0.3"
+              metalness="0.2"/>
+    </looks>
+
+
+    <!--
+        A one-link floating robot is used because Stonefish actuators
+        must be attached to a robot link.
+    -->
+    <robot name="$(arg vehicle_name)"
+           fixed="false"
+           self_collisions="false">
+
+        <base_link name="fish_body"
+                   type="model"
+                   physics="submerged"
+                   buoyant="true">
+
+            <physical>
+                <mesh filename="cad_model_data/yellow_tang_test.obj"
+                      scale="1.0"/>
+
+                <origin xyz="0.0 0.0 0.0"
+                        rpy="0.0 0.0 0.0"/>
+            </physical>
+
+            <material name="Neutral"/>
+            <look name="yellow_tang_look"/>
+
+            <mass value="0.109"/>
+
+            <cg xyz="-0.022 0.0 0.0"
+                rpy="0.0 0.0 0.0"/>
+
+            <inertia xyz="0.00015 0.00030 0.00035"/>
+
+        </base_link>
+
+
+        <!-- Left rear thruster -->
+        <actuator name="FishLeft" type="thruster">
+
+            <link name="fish_body"/>
+
+            <!--
+                The x position should be near the tail.
+                The y offsets provide differential steering.
+            -->
+            <origin xyz="-0.080 -0.025 0.0"
+                    rpy="0.0 0.0 0.0"/>
+
+            <specs max_setpoint="50.0"
+                   inverted_setpoint="false"
+                   normalized_setpoint="false"/>
+
+            <rotor_dynamics type="zero_order"/>
+
+            <thrust_model type="fluid_dynamics">
+                <rotor_constant value="1.0"/>
+                <thrust_coeff forward="0.004"
+                              reverse="0.004"/>
+                <torque_coeff value="0.000001"/>
+            </thrust_model>
+
+            <propeller diameter="0.020" right="true">
+                <mesh filename="cad_model_data/cw_smaller082.obj"
+                      scale="0.20"/>
+
+                <material name="Neutral"/>
+                <look name="fish_thruster"/>
+            </propeller>
+
+        </actuator>
+
+
+        <!-- Right rear thruster -->
+        <actuator name="FishRight" type="thruster">
+
+            <link name="fish_body"/>
+
+            <origin xyz="-0.080 0.025 0.0"
+                    rpy="0.0 0.0 0.0"/>
+
+            <specs max_setpoint="50.0"
+                   inverted_setpoint="true"
+                   normalized_setpoint="false"/>
+
+            <rotor_dynamics type="zero_order"/>
+
+            <thrust_model type="fluid_dynamics">
+                <rotor_constant value="1.0"/>
+                <thrust_coeff forward="0.004"
+                              reverse="0.004"/>
+                <torque_coeff value="0.000001"/>
+            </thrust_model>
+
+            <propeller diameter="0.020" right="false">
+                <mesh filename="cad_model_data/ccw_smaller082.obj"
+                      scale="0.20"/>
+
+                <material name="Neutral"/>
+                <look name="fish_thruster"/>
+            </propeller>
+
+        </actuator>
+
+
+        <!-- Initial position and ROS command topic -->
+        <world_transform xyz="$(arg position)"
+                         rpy="$(arg orientation)"/>
+
+        <ros_subscriber
+            thrusters="/$(arg vehicle_name)/setpoint/thrusters"/>
+
+    </robot>
+
+</scenario>
+

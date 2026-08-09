@@ -3,12 +3,12 @@
 
     <looks>
         <!-- QUT ROV looks -->
-        <look name="rov_body" gray="0.55" roughness="0.45" metalness="0.25" texture="cad_model_data/rov_models/rov_texture.png"/>
+        <look name="rov_body" gray="1.0" roughness="0.4" metalness="0.2" texture="cad_model_data/rov_models/subbyrov_baked.png"/>
         <look name="foam" rgb="0.15 0.15 0.15" roughness="0.80"/>
         <look name="thruster" rgb="0.0 0.0 0.0" roughness="0.3" metalness="0.5"/>
         <look name="camera" rgb="0.10 0.10 0.10" roughness="0.40"/>
         <look name="default" rgb="1.0 1.0 1.0" roughness="1.0" metalness="0.0"/>
-    </looks>
+            </looks>
 
 
     <!-- <dynamic name="center_of_mass" type="sphere" physics="submerged" buoyant="false">
@@ -35,14 +35,14 @@
             </physical>
 
             <visual>
-                <mesh filename="cad_model_data/rov_models/vis.obj" scale="1.0"/>
-                <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0"/>
+                <mesh filename="cad_model_data/rov_models/vis_colour.obj" scale="1.0"/>
+                <origin rpy="0 1.5708 -1.5708" xyz="-0.18 0 -0.01"/>
             </visual>
 
             <material name="HullMat"/>
             <look name="rov_body"/>
-            <mass value="4.417"/>
-            <inertia xyz="0.03 0.036 0.0535"/>
+            <mass value="4.5"/>
+            <inertia xyz="0.03 0.536 0.0535"/>
             <!-- <cg xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0"/> -->
             <!-- <cg xyz="0.004 0.00011 -0.005" rpy="0.0 0.0 0.0"/> -->
             <cg xyz="0.00 0.0 0.0" rpy="0.0 0.0 0.0"/>
@@ -91,7 +91,7 @@
         <actuator name="BL" type="thruster">
             <link name="base_link"/>
             <!-- <origin xyz="-0.09735 -0.140 0.0066" rpy="0.0 0.0 0.0"/> -->
-            <origin xyz="-0.09735 -0.140 0.0" rpy="0.0 0.0 0.0"/>
+            <origin xyz="-0.09735 -0.140 -0.007" rpy="0.0 0.0 0.0"/>
             <specs max_setpoint="1200.0" inverted_setpoint="false" normalized_setpoint="false"/>
             <rotor_dynamics type="zero_order"/>
             <thrust_model type="fluid_dynamics">
@@ -110,7 +110,7 @@
         <actuator name="BR" type="thruster">
             <link name="base_link"/>
             <!-- <origin xyz="-0.09735 0.140 0.0066" rpy="0.0 0.0 0.0"/> -->
-            <origin xyz="-0.09735 0.140 0.0" rpy="0.0 0.0 0.0"/>
+            <origin xyz="-0.09735 0.140 -0.007" rpy="0.0 0.0 0.0"/>
             <specs max_setpoint="1200.0" inverted_setpoint="true" normalized_setpoint="false"/>
             <rotor_dynamics type="zero_order"/>
             <thrust_model type="fluid_dynamics">
@@ -128,15 +128,15 @@
         <!-- COMMENTING OUT SENSORS FOR THE TIME BEING -->
 
 
-        <sensor name="Cam" rate="30.0" type="camera">
-            <specs resolution_x="640" resolution_y="480" horizontal_fov="75.0"/>
+        <sensor name="Cam" rate="60.0" type="camera">
+            <specs resolution_x="480" resolution_y="360" horizontal_fov="75.0"/>
             <!-- <origin xyz="0.14816 -0.00046 -0.00106" rpy="1.5708 0 1.5708"/> -->
             <origin xyz="0.19 -0.00046 -0.00106" rpy="1.5708 0 1.5708"/>
             <link name="base_link"/>
             <ros_publisher topic="/$(arg vehicle_name)/left"/>
         </sensor>
 
-        <sensor name="IMU" rate="50.0" type="imu">
+        <sensor name="IMU" rate="30.0" type="imu">
             <noise angle="0.0 0.0 0.0" angular_velocity="0.0" yaw_drift="0.0" linear_acceleration="0.0"/>
             <history samples="1"/>
             <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0"/>
@@ -144,7 +144,7 @@
             <ros_publisher imu="IMU" topic="/$(arg vehicle_name)/imu"/>
         </sensor>
 
-        <sensor name="Pressure" rate="50.0" type="pressure">
+        <sensor name="Pressure" rate="30.0" type="pressure">
             <range pressure="200000.0"/>
             <noise pressure="0.5"/>
             <history samples="1"/>

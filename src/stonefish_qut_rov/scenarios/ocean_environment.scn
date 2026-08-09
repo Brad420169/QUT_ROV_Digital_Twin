@@ -1,28 +1,8 @@
 <?xml version="1.0"?>
 <scenario>
-<!-- 
-	<environment>
-		<ned latitude="56.136459" longitude="-2.706819"/>
-		<ocean>
-			<water density="1031.0" jerlov="0.15"/>
-			<waves height="0.0"/>
-			<particles enabled="true"/>
-			<current type="uniform">
-				<velocity xyz="0.0 0.0 0.0"/>
-			</current>
-			<current type="jet">
-				<center xyz="0.0 0.0 0.0"/>
-				<outlet radius="100.0"/>
-				<velocity xyz="0.0 0.0 0.0"/>
-			</current>
-		</ocean>
-		<atmosphere>
-			<sun azimuth="45.0" elevation="90.0"/>
-		</atmosphere>
-	</environment> -->
 
 
-<!-- DISABLED ANY CURRENT FORCES -->
+
     <environment>
         <ned latitude="56.136459" longitude="-2.706819"/>
 
@@ -63,14 +43,13 @@
 
     <looks>
         <!-- Open ocean looks -->
-        <look name="black" gray="0.05" roughness="0.2"/>
+        <!-- <look name="black" gray="0.05" roughness="0.2"/>
 		<look name="yellow" rgb="1.0 0.9 0.0" roughness="0.3"/>
 		<look name="gray" gray="0.5" roughness="0.4" metalness="0.5"/>
 		<look name="orange" rgb="1.0 0.5 0.0" roughness="0.4"/>
 		<look name="ltgray" gray="0.75" roughness="1.0" metalness="0.0"/>
 		<look name="tank" rgb="0.9 0.9 0.9" roughness="0.9"/>
 		<look name="duct" gray="0.1" roughness="0.4" metalness="0.5"/>
-    	<look name="sand" gray="1.0" roughness="0.7" metalness="0.3" texture="cad_model_data/ocean_test_data/SoilBeach0078_1_350.jpg"/>
     	<look name="gas_canister" gray="1.0" roughness="0.5" metalness="0.3" texture="cad_model_data/ocean_test_data/gas_canister.png"/>
     	<look name="gas_tank" gray="1.0" roughness="0.5" metalness="0.5" texture="cad_model_data/ocean_test_data/gas_tank.png"/>
     	<look name="oil_drum" gray="1.0" roughness="0.5" metalness="0.2" texture="cad_model_data/ocean_test_data/oil_drum.png"/>
@@ -78,8 +57,10 @@
     	<look name="anode_bar" gray="1.0" roughness="0.5" metalness="0.2" texture="cad_model_data/ocean_test_data/anode_d.png"/>
         <look name="green" rgb="0 1 0" roughness="0.5"/>
         <look name="turbine_base" gray="1.0" roughness="0.4" metalness="0.5" texture="cad_model_data/ocean_test_data/Turbine_Base_Diffuse.png"/>
-		<look name="turbine_main" gray="1.0" roughness="0.4" metalness="0.5" texture="cad_model_data/ocean_test_data/Turbine_Main_Diffuse.png"/>
-    </looks>
+		<look name="turbine_main" gray="1.0" roughness="0.4" metalness="0.5" texture="cad_model_data/ocean_test_data/Turbine_Main_Diffuse.png"/> -->
+	   	<look name="sand" gray="1.0" roughness="0.7" metalness="0.3" texture="cad_model_data/ocean_test_data/SoilBeach0078_1_350.jpg"/>
+		<look name="coral_map" gray="1.0" roughness="0.7" metalness="0.3" texture="cad_model_data/corals/texture/coral_map.jpeg"/>
+	</looks>
 
 
     <!-- defining objects in the environment -->
@@ -93,7 +74,22 @@
 		<world_transform rpy="0.0 0.0 0.0" xyz="0.0 0.0 6.0"/>
 	</static>
 
-	<static name="Canister1" type="model">
+	<static name="Coralmap" type="model">
+		<physical>
+			<mesh filename="cad_model_data/corals/mesh/coral_map.obj" scale="0.5"/>
+			<origin rpy="0.0 0.0 0.0" xyz="0.0 3.0 0.0"/>
+		</physical>
+		<material name="Neutral"/>
+		<look name="coral_map"/>
+		<world_transform rpy="3.14 0 0" xyz="0 0.0 5"/>
+	</static>
+
+
+
+
+
+
+	<!-- <static name="Canister1" type="model">
 		<physical>
 			<mesh filename="cad_model_data/ocean_test_data/gas_canister.obj" scale="1"/>
 			<origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0"/>
@@ -151,24 +147,30 @@
 		<material name="Aluminium"/>
 		<look name="rust_pipe"/>
 		<world_transform rpy="0.0 1.57 1.57" xyz="-4.0 0.0 5.3"/>
-	</static>
+	</static> -->
 
-	<dynamic name="OrangeSphere" type="sphere" physics="submerged">
-		<dimensions radius="0.1"/>
-		<origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0"/>
-		<material name="NeutralWater"/>
-		<look name="orange"/>
-		<world_transform rpy="0.0 0.0 0.0" xyz="2.0 0 5.0"/>
-	</dynamic>
+
+
+
 
     <!-- change each line for using the fullmesh robot or defined in parts robot -->
     <!-- <include file="$(find stonefish_qut_rov)/scenarios/rov_mesh_only.scn"> -->
     <!-- <include file="scenarios/stable_but_unrealistic.scn"> -->
+
+
+
 	<include file="$(find stonefish_qut_rov)/scenarios/main_rov.scn">
 
         <arg name="vehicle_name" value="qut_rov"/>
-        <arg name="position" value="0.0 1.0 5.0"/>
+        <arg name="position" value="1.0 1.0 3.0"/>
         <arg name="orientation" value="0.0 0.0 0.0"/>
+	</include>
+
+	<include file="$(find stonefish_qut_rov)/scenarios/yellow_tang_animated.scn">
+	
+		<arg name="vehicle_name" value="yellow_tang"/>
+		<arg name="position" value="2.0 0.0 4.0"/>
+		<arg name="orientation" value="0.0 0.0 0.0"/>
 	</include>
 
 </scenario>

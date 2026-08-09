@@ -95,7 +95,7 @@ class DepthKeepingNode(Node):
 
         self.declare_parameter("enabled", False)
 
-        self.declare_parameter("target_depth_m", 4.0)
+        self.declare_parameter("target_depth_m", 1.0)
 
         self.declare_parameter("max_pwm", 600.0)
 

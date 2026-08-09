@@ -1,0 +1,229 @@
+<?xml version="1.0"?>
+<scenario>
+
+    <looks>
+        <look name="yellow_tang_look"
+              gray="1.0"
+              roughness="0.4"
+              metalness="0.0"
+              texture="cad_model_data/fish_models/yellow_tang_look.png"/>
+
+        <look name="blue_powder_tang_look"
+              gray="1.0"
+              roughness="0.4"
+              metalness="0.0"
+              texture="cad_model_data/fish_models/blue_tang.png"/>
+
+        <look name="lined_butterflyfish_look"
+              gray="1.0"
+              roughness="0.4"
+              metalness="0.0"
+              texture="cad_model_data/fish_models/lined_butterflyfish.png"/>
+
+        <look name="parrot_fish_curacao_look"
+              gray="1.0"
+              roughness="0.4"
+              metalness="0.0"
+              texture="cad_model_data/fish_models/parrot_fish_curacao.png"/>
+    </looks>
+
+    <!-- ================================================================
+         YELLOW TANG — clockwise square loop at Z=2.0, 3x3m arena
+         centred at (0.0, 0.0)
+    ================================================================ -->
+    <animated name="$(arg vehicle_name)"
+              type="model"
+              collisions="false">
+
+        <physical>
+            <mesh filename="cad_model_data/fish_models/yellow_tang_test.obj"
+                  scale="1.0"/>
+            <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0"/>
+        </physical>
+
+        <material name="Neutral"/>
+        <look name="yellow_tang_look"/>
+
+        <trajectory type="pwl" playback="repeat">
+            <keypoint time="0.00"  xyz="-1.5 -1.5 2.00" rpy="0.0 0.0  0.00"/>
+            <keypoint time="2.25"  xyz="-1.0 -1.5 2.03" rpy="0.0 0.0  0.07"/>
+            <keypoint time="4.50"  xyz="-0.5 -1.5 1.97" rpy="0.0 0.0 -0.07"/>
+            <keypoint time="6.75"  xyz=" 0.0 -1.5 2.03" rpy="0.0 0.0  0.07"/>
+            <keypoint time="9.00"  xyz=" 0.5 -1.5 1.97" rpy="0.0 0.0 -0.07"/>
+            <keypoint time="10.50" xyz=" 0.9 -1.5 2.00" rpy="0.0 0.0  0.3927"/>
+            <keypoint time="11.25" xyz=" 1.1 -1.5 2.00" rpy="0.0 0.0  0.7854"/>
+            <keypoint time="12.00" xyz=" 1.5 -1.5 2.00" rpy="0.0 0.0  1.1781"/>
+            <keypoint time="12.75" xyz=" 1.5 -1.1 2.00" rpy="0.0 0.0  1.3744"/>
+            <keypoint time="13.50" xyz=" 1.5 -0.8 2.00" rpy="0.0 0.0  1.5708"/>
+            <keypoint time="15.75" xyz=" 1.5 -0.3 2.03" rpy="0.0 0.0  1.6408"/>
+            <keypoint time="18.00" xyz=" 1.5  0.2 1.97" rpy="0.0 0.0  1.5008"/>
+            <keypoint time="20.25" xyz=" 1.5  0.7 2.03" rpy="0.0 0.0  1.6408"/>
+            <keypoint time="22.50" xyz=" 1.5  1.2 1.97" rpy="0.0 0.0  1.5008"/>
+            <keypoint time="24.00" xyz=" 1.5  1.3 2.00" rpy="0.0 0.0  1.9635"/>
+            <keypoint time="24.75" xyz=" 1.5  1.4 2.00" rpy="0.0 0.0  2.3562"/>
+            <keypoint time="25.50" xyz=" 1.5  1.5 2.00" rpy="0.0 0.0  2.7489"/>
+            <keypoint time="26.25" xyz=" 1.1  1.5 2.00" rpy="0.0 0.0  2.9452"/>
+            <keypoint time="27.00" xyz=" 0.8  1.5 2.00" rpy="0.0 0.0  3.1416"/>
+            <keypoint time="29.25" xyz=" 0.3  1.5 2.03" rpy="0.0 0.0  3.0716"/>
+            <keypoint time="31.50" xyz="-0.2  1.5 1.97" rpy="0.0 0.0  3.2116"/>
+            <keypoint time="33.75" xyz="-0.7  1.5 2.03" rpy="0.0 0.0  3.0716"/>
+            <keypoint time="36.00" xyz="-1.2  1.5 1.97" rpy="0.0 0.0  3.2116"/>
+            <keypoint time="37.50" xyz="-1.3  1.5 2.00" rpy="0.0 0.0 -2.7489"/>
+            <keypoint time="38.25" xyz="-1.4  1.5 2.00" rpy="0.0 0.0 -2.3562"/>
+            <keypoint time="39.00" xyz="-1.5  1.5 2.00" rpy="0.0 0.0 -1.9635"/>
+            <keypoint time="39.75" xyz="-1.5  1.1 2.00" rpy="0.0 0.0 -1.7671"/>
+            <keypoint time="40.50" xyz="-1.5  0.8 2.00" rpy="0.0 0.0 -1.5708"/>
+            <keypoint time="42.75" xyz="-1.5  0.3 2.03" rpy="0.0 0.0 -1.6408"/>
+            <keypoint time="45.00" xyz="-1.5 -0.2 1.97" rpy="0.0 0.0 -1.5008"/>
+            <keypoint time="47.25" xyz="-1.5 -0.7 2.03" rpy="0.0 0.0 -1.6408"/>
+            <keypoint time="49.50" xyz="-1.5 -1.2 1.97" rpy="0.0 0.0 -1.5008"/>
+            <keypoint time="51.00" xyz="-1.5 -1.3 2.00" rpy="0.0 0.0 -1.1781"/>
+            <keypoint time="51.75" xyz="-1.5 -1.4 2.00" rpy="0.0 0.0 -0.7854"/>
+            <keypoint time="52.50" xyz="-1.5 -1.5 2.00" rpy="0.0 0.0 -0.3927"/>
+            <keypoint time="53.25" xyz="-1.1 -1.5 2.00" rpy="0.0 0.0 -0.1963"/>
+            <keypoint time="54.00" xyz="-0.8 -1.5 2.00" rpy="0.0 0.0  0.0000"/>
+        </trajectory>
+    </animated>
+
+    <!-- ================================================================
+         BLUE POWDER TANG — REVERSE of yellow tang's square loop at Z=2.5
+         Arena offset +3.0 in X, centred at (3.0, 0.0), spanning [1.5, 4.5].
+         Starts where yellow tang ends (x=-0.8+3=2.2, y=-1.5) and travels
+         counter-clockwise (opposite winding to yellow tang).
+         Yaw = yellow tang yaw + π.  Z wobble sign is preserved.
+    ================================================================ -->
+    <animated name="blue_tang"
+              type="model"
+              collisions="false">
+
+        <physical>
+            <mesh filename="cad_model_data/fish_models/blue_tang.obj"
+                  scale="0.008"/>
+            <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0"/>
+        </physical>
+
+        <material name="Neutral"/>
+        <look name="blue_powder_tang_look"/>
+
+        <trajectory type="pwl" playback="repeat">
+            <!-- Start: yellow tang t=36 reversed → t=0 here -->
+            <keypoint time="0.0"  xyz=" 2.2 -1.5 2.50" rpy="0.0 0.0  3.1416"/>
+            <keypoint time="0.5"  xyz=" 1.9 -1.5 2.50" rpy="0.0 0.0  2.9453"/>
+            <keypoint time="1.0"  xyz=" 1.5 -1.5 2.50" rpy="0.0 0.0  2.7489"/>
+            <!-- Corner: bottom-left, turning up -->
+            <keypoint time="1.5"  xyz=" 1.5 -1.4 2.50" rpy="0.0 0.0  2.3562"/>
+            <keypoint time="2.0"  xyz=" 1.5 -1.3 2.50" rpy="0.0 0.0  1.9635"/>
+            <!-- Left side: travel +Y -->
+            <keypoint time="3.0"  xyz=" 1.5 -1.2 2.47" rpy="0.0 0.0  1.6408"/>
+            <keypoint time="4.5"  xyz=" 1.5 -0.7 2.53" rpy="0.0 0.0  1.5008"/>
+            <keypoint time="6.0"  xyz=" 1.5 -0.2 2.47" rpy="0.0 0.0  1.6408"/>
+            <keypoint time="7.5"  xyz=" 1.5  0.3 2.53" rpy="0.0 0.0  1.5008"/>
+            <keypoint time="9.0"  xyz=" 1.5  0.8 2.50" rpy="0.0 0.0  1.5708"/>
+            <!-- Corner: top-left, turning right -->
+            <keypoint time="9.5"  xyz=" 1.5  1.1 2.50" rpy="0.0 0.0  1.3745"/>
+            <keypoint time="10.0" xyz=" 1.5  1.5 2.50" rpy="0.0 0.0  1.1781"/>
+            <keypoint time="10.5" xyz=" 1.6  1.5 2.50" rpy="0.0 0.0  0.7854"/>
+            <keypoint time="11.0" xyz=" 1.7  1.5 2.50" rpy="0.0 0.0  0.3927"/>
+            <!-- Top side: travel +X -->
+            <keypoint time="12.0" xyz=" 1.8  1.5 2.47" rpy="0.0 0.0  0.0700"/>
+            <keypoint time="13.5" xyz=" 2.3  1.5 2.53" rpy="0.0 0.0 -0.0700"/>
+            <keypoint time="15.0" xyz=" 2.8  1.5 2.47" rpy="0.0 0.0  0.0700"/>
+            <keypoint time="16.5" xyz=" 3.3  1.5 2.53" rpy="0.0 0.0 -0.0700"/>
+            <keypoint time="18.0" xyz=" 3.8  1.5 2.50" rpy="0.0 0.0  0.0000"/>
+            <!-- Corner: top-right, turning down -->
+            <keypoint time="18.5" xyz=" 4.1  1.5 2.50" rpy="0.0 0.0 -0.1964"/>
+            <keypoint time="19.0" xyz=" 4.5  1.5 2.50" rpy="0.0 0.0 -0.3927"/>
+            <keypoint time="19.5" xyz=" 4.5  1.4 2.50" rpy="0.0 0.0 -0.7854"/>
+            <keypoint time="20.0" xyz=" 4.5  1.3 2.50" rpy="0.0 0.0 -1.1781"/>
+            <!-- Right side: travel -Y -->
+            <keypoint time="21.0" xyz=" 4.5  1.2 2.47" rpy="0.0 0.0 -1.6408"/>
+            <keypoint time="22.5" xyz=" 4.5  0.7 2.53" rpy="0.0 0.0 -1.5008"/>
+            <keypoint time="24.0" xyz=" 4.5  0.2 2.47" rpy="0.0 0.0 -1.6408"/>
+            <keypoint time="25.5" xyz=" 4.5 -0.3 2.53" rpy="0.0 0.0 -1.5008"/>
+            <keypoint time="27.0" xyz=" 4.5 -0.8 2.50" rpy="0.0 0.0 -1.5708"/>
+            <!-- Corner: bottom-right, turning left -->
+            <keypoint time="27.5" xyz=" 4.5 -1.1 2.50" rpy="0.0 0.0 -1.7672"/>
+            <keypoint time="28.0" xyz=" 4.5 -1.5 2.50" rpy="0.0 0.0 -1.9635"/>
+            <keypoint time="28.5" xyz=" 4.1 -1.5 2.50" rpy="0.0 0.0 -2.3562"/>
+            <keypoint time="29.0" xyz=" 3.9 -1.5 2.50" rpy="0.0 0.0 -2.7489"/>
+            <!-- Bottom side: travel -X back to start -->
+            <keypoint time="30.0" xyz=" 3.5 -1.5 2.47" rpy="0.0 0.0  3.0716"/>
+            <keypoint time="31.5" xyz=" 3.0 -1.5 2.53" rpy="0.0 0.0 -3.0716"/>
+            <keypoint time="33.0" xyz=" 2.5 -1.5 2.47" rpy="0.0 0.0  3.0716"/>
+            <keypoint time="34.5" xyz=" 2.0 -1.5 2.53" rpy="0.0 0.0 -3.0716"/>
+            <keypoint time="36.0" xyz=" 1.5 -1.5 2.50" rpy="0.0 0.0  3.1416"/>
+        </trajectory>
+    </animated>
+
+    <!-- ================================================================
+         LINED BUTTERFLYFISH — Bernoulli lemniscate (∞ figure-8) at Z=1.5
+         Centred at (-4.5, 0.0), semi-axis a=1.5 m (x range [-3.0, -6.0]).
+         Parametric: x = a·cos(θ)/(1+sin²θ),  y = a·sin(θ)·cos(θ)/(1+sin²θ)
+         θ ∈ [0, 2π] over 36 s.  Right lobe first (t=0..18), then left (t=18..36).
+         Yaw is computed from the tangent direction of the curve.
+    ================================================================ -->
+    <animated name="lined_butterflyfish"
+              type="model"
+              collisions="false">
+
+        <physical>
+            <mesh filename="cad_model_data/fish_models/lined_butterflyfish.obj"
+                  scale="0.08"/>
+            <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0"/>
+        </physical>
+
+        <material name="Neutral"/>
+        <look name="lined_butterflyfish_look"/>
+
+        <trajectory type="pwl" playback="repeat">
+            <!-- θ=0: rightmost tip of right lobe, heading up (+Y) -->
+            <keypoint time="0.0"  xyz="-3.000  0.000 1.50" rpy="0.0 0.0  1.5708"/>
+            <!-- Tracing upper arc of right lobe (sweeping toward centre) -->
+            <keypoint time="1.0"  xyz="-3.066  0.249 1.51" rpy="0.0 0.0  2.0866"/>
+            <keypoint time="2.0"  xyz="-3.238  0.432 1.52" rpy="0.0 0.0  2.5595"/>
+            <keypoint time="3.0"  xyz="-3.461  0.520 1.53" rpy="0.0 0.0  2.9617"/>
+            <keypoint time="4.0"  xyz="-3.687  0.523 1.53" rpy="0.0 0.0 -2.9985"/>
+            <keypoint time="5.0"  xyz="-3.892  0.465 1.53" rpy="0.0 0.0 -2.7513"/>
+            <keypoint time="6.0"  xyz="-4.071  0.371 1.53" rpy="0.0 0.0 -2.5712"/>
+            <keypoint time="7.0"  xyz="-4.228  0.256 1.52" rpy="0.0 0.0 -2.4494"/>
+            <keypoint time="8.0"  xyz="-4.368  0.130 1.51" rpy="0.0 0.0 -2.3792"/>
+            <!-- θ=π/2: origin crossing, heading toward left lobe -->
+            <keypoint time="9.0"  xyz="-4.500  0.000 1.50" rpy="0.0 0.0 -2.3562"/>
+            <!-- Lower arc of left lobe -->
+            <keypoint time="10.0" xyz="-4.632 -0.130 1.49" rpy="0.0 0.0 -2.3792"/>
+            <keypoint time="11.0" xyz="-4.772 -0.256 1.48" rpy="0.0 0.0 -2.4494"/>
+            <keypoint time="12.0" xyz="-4.929 -0.371 1.47" rpy="0.0 0.0 -2.5712"/>
+            <keypoint time="13.0" xyz="-5.108 -0.465 1.47" rpy="0.0 0.0 -2.7513"/>
+            <keypoint time="14.0" xyz="-5.313 -0.523 1.47" rpy="0.0 0.0 -2.9985"/>
+            <keypoint time="15.0" xyz="-5.539 -0.520 1.47" rpy="0.0 0.0  2.9617"/>
+            <keypoint time="16.0" xyz="-5.762 -0.432 1.48" rpy="0.0 0.0  2.5594"/>
+            <keypoint time="17.0" xyz="-5.934 -0.249 1.49" rpy="0.0 0.0  2.0866"/>
+            <!-- θ=π: leftmost tip of left lobe, heading up (+Y) -->
+            <keypoint time="18.0" xyz="-6.000  0.000 1.50" rpy="0.0 0.0  1.5708"/>
+            <!-- Upper arc of left lobe back toward centre -->
+            <keypoint time="19.0" xyz="-5.934  0.249 1.51" rpy="0.0 0.0  1.0550"/>
+            <keypoint time="20.0" xyz="-5.762  0.432 1.52" rpy="0.0 0.0  0.5821"/>
+            <keypoint time="21.0" xyz="-5.539  0.520 1.53" rpy="0.0 0.0  0.1798"/>
+            <keypoint time="22.0" xyz="-5.313  0.523 1.53" rpy="0.0 0.0 -0.1431"/>
+            <keypoint time="23.0" xyz="-5.108  0.465 1.53" rpy="0.0 0.0 -0.3903"/>
+            <keypoint time="24.0" xyz="-4.929  0.371 1.53" rpy="0.0 0.0 -0.5704"/>
+            <keypoint time="25.0" xyz="-4.772  0.256 1.52" rpy="0.0 0.0 -0.6922"/>
+            <keypoint time="26.0" xyz="-4.632  0.130 1.51" rpy="0.0 0.0 -0.7624"/>
+            <!-- θ=3π/2: origin crossing, heading toward right lobe -->
+            <keypoint time="27.0" xyz="-4.500  0.000 1.50" rpy="0.0 0.0 -0.7854"/>
+            <!-- Lower arc of right lobe -->
+            <keypoint time="28.0" xyz="-4.368 -0.130 1.49" rpy="0.0 0.0 -0.7624"/>
+            <keypoint time="29.0" xyz="-4.228 -0.256 1.48" rpy="0.0 0.0 -0.6922"/>
+            <keypoint time="30.0" xyz="-4.071 -0.371 1.47" rpy="0.0 0.0 -0.5704"/>
+            <keypoint time="31.0" xyz="-3.892 -0.465 1.47" rpy="0.0 0.0 -0.3903"/>
+            <keypoint time="32.0" xyz="-3.687 -0.523 1.47" rpy="0.0 0.0 -0.1431"/>
+            <keypoint time="33.0" xyz="-3.461 -0.520 1.47" rpy="0.0 0.0  0.1799"/>
+            <keypoint time="34.0" xyz="-3.238 -0.432 1.48" rpy="0.0 0.0  0.5822"/>
+            <keypoint time="35.0" xyz="-3.066 -0.249 1.49" rpy="0.0 0.0  1.0550"/>
+            <!-- θ=2π: back to start, loop closes -->
+            <keypoint time="36.0" xyz="-3.000  0.000 1.50" rpy="0.0 0.0  1.5708"/>
+        </trajectory>
+    </animated>
+
+
+</scenario>
