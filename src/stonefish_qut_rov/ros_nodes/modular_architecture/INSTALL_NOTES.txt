@@ -1,0 +1,172 @@
+QUT ROV CLEAN CONTROL ARCHITECTURE V2
+=====================================
+
+THIS VERSION KEEPS FISH FOLLOWING FOR SIMULATION.
+
+FILES
+-----
+
+rov_control.py
+    Single entry point: asks s or r.
+
+teleop_controller.py
+    High-level controller:
+        manual
+        depth keeping
+        trajectory
+        camera/detector toggle
+        fish-follow toggle (SIM only)
+
+sim_interface.py
+    surge/heave/yaw -> Stonefish [TL, TR, BL, BR]
+    pressure -> common depth topic
+
+thruster_mixer.py
+    Stonefish mixer.
+
+rov_config.py
+    Topics, gains, buttons, limits.
+
+control_utils.py
+    Reusable maths/helpers.
+
+pid_controller.py
+    Reusable PID.
+
+fish_detector_follower.py
+    Your actual detector/follower, converted to publish surge/heave/yaw.
+
+
+FISH DETECTOR FOLLOWER
+----------------------
+
+The supplied fish_detector_follower.py has now been converted.
+
+It no longer publishes individual Stonefish thrusters.
+
+It publishes:
+
+    /qut_rov/fish_follow_cmd
+    geometry_msgs/Twist
+
+using:
+
+    linear.x  = surge
+    linear.z  = heave
+    angular.z = yaw
+
+
+WHY
+---
+
+This means EVERY controller now uses the same vehicle-level interface:
+
+    manual
+    depth keeping
+    trajectory
+    fish following
+         |
+         v
+    surge / heave / yaw
+         |
+         v
+    /qut_rov/cmd_vel
+         |
+         v
+    sim_interface.py
+         |
+         v
+    [TL, TR, BL, BR]
+         |
+         v
+    Stonefish
+
+
+THRUSTER ORDER
+--------------
+
+[TL, TR, BL, BR]
+
+TL/TR = vertical
+BL/BR = horizontal
+
+TR and BR are already inverted in the Stonefish XML.
+Do not invert them again in Python.
+
+
+INSTALL
+-------
+
+Put the Python files in:
+
+    stonefish_qut_rov/ros_nodes/
+
+
+CMakeLists.txt:
+
+install(PROGRAMS
+    ros_nodes/rov_control.py
+    ros_nodes/teleop_controller.py
+    ros_nodes/sim_interface.py
+    ros_nodes/thruster_mixer.py
+    ros_nodes/control_utils.py
+    ros_nodes/pid_controller.py
+    ros_nodes/fish_detector_follower.py
+    DESTINATION lib/${PROJECT_NAME}
+)
+
+
+Then:
+
+    chmod +x ros_nodes/rov_control.py
+    chmod +x ros_nodes/teleop_controller.py
+    chmod +x ros_nodes/sim_interface.py
+    chmod +x ros_nodes/fish_detector_follower.py
+
+Rebuild:
+
+    colcon build --packages-select stonefish_qut_rov
+    source install/setup.bash
+
+
+RUN
+---
+
+1. Start Stonefish as normal.
+
+2. Run:
+
+    ros2 run stonefish_qut_rov rov_control.py
+
+3. Enter:
+
+    s
+
+
+CONTROLS
+--------
+
+Left stick Y       surge
+Right stick X      yaw
+RT                 heave up
+LT                 heave down
+L bumper           depth keeping
+R bumper           trajectory
+Y button           open/close detector+camera
+X button           fish follow on/off
+
+
+IMPORTANT
+---------
+
+The generated fish_follower_adapter.py is NOT a replacement for your
+existing fish detector.
+
+It is a reference/template for the output section of your existing
+fish_detector_follower.py.
+
+To make fish following fully plug-and-play, the existing
+fish_detector_follower.py needs to be edited so its final motor/thruster
+output becomes a Twist surge/heave/yaw output.
+
+Real mode remains blocked for safety until MAVROS is added.

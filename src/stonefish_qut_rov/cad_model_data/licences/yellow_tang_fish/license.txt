@@ -1,0 +1,11 @@
+Model Information:
+* title:	Yellow Tang Fish
+* source:	https://sketchfab.com/3d-models/yellow-tang-fish-42f6f389aee64ba9ba0df6e6b6408c34
+* author:	Twardun (https://sketchfab.com/Twardunger)
+
+Model License:
+* license type:	CC-BY-NC-ND-4.0 (http://creativecommons.org/licenses/by-nc-nd/4.0/)
+* requirements:	Author must be credited. No commercial use. Modified versions can not be distributed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Yellow Tang Fish" (https://sketchfab.com/3d-models/yellow-tang-fish-42f6f389aee64ba9ba0df6e6b6408c34) by Twardun (https://sketchfab.com/Twardunger) licensed under CC-BY-NC-ND-4.0 (http://creativecommons.org/licenses/by-nc-nd/4.0/)

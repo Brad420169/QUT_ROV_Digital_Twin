@@ -42,31 +42,15 @@
 
 
     <looks>
-        <!-- Open ocean looks -->
-        <!-- <look name="black" gray="0.05" roughness="0.2"/>
-		<look name="yellow" rgb="1.0 0.9 0.0" roughness="0.3"/>
-		<look name="gray" gray="0.5" roughness="0.4" metalness="0.5"/>
-		<look name="orange" rgb="1.0 0.5 0.0" roughness="0.4"/>
-		<look name="ltgray" gray="0.75" roughness="1.0" metalness="0.0"/>
-		<look name="tank" rgb="0.9 0.9 0.9" roughness="0.9"/>
-		<look name="duct" gray="0.1" roughness="0.4" metalness="0.5"/>
-    	<look name="gas_canister" gray="1.0" roughness="0.5" metalness="0.3" texture="cad_model_data/ocean_test_data/gas_canister.png"/>
-    	<look name="gas_tank" gray="1.0" roughness="0.5" metalness="0.5" texture="cad_model_data/ocean_test_data/gas_tank.png"/>
-    	<look name="oil_drum" gray="1.0" roughness="0.5" metalness="0.2" texture="cad_model_data/ocean_test_data/oil_drum.png"/>
-    	<look name="rust_pipe" gray="1.0" roughness="0.5" metalness="0.2" texture="cad_model_data/ocean_test_data/rust_pipe.png"/>
-    	<look name="anode_bar" gray="1.0" roughness="0.5" metalness="0.2" texture="cad_model_data/ocean_test_data/anode_d.png"/>
-        <look name="green" rgb="0 1 0" roughness="0.5"/>
-        <look name="turbine_base" gray="1.0" roughness="0.4" metalness="0.5" texture="cad_model_data/ocean_test_data/Turbine_Base_Diffuse.png"/>
-		<look name="turbine_main" gray="1.0" roughness="0.4" metalness="0.5" texture="cad_model_data/ocean_test_data/Turbine_Main_Diffuse.png"/> -->
-	   	<look name="sand" gray="1.0" roughness="0.7" metalness="0.3" texture="cad_model_data/ocean_test_data/SoilBeach0078_1_350.jpg"/>
-		<look name="coral_map" gray="1.0" roughness="0.7" metalness="0.3" texture="cad_model_data/corals/texture/coral_map.jpeg"/>
+	   	<look name="sand" gray="1.0" roughness="0.7" metalness="0.3" texture="cad_model_data//environment/corals/texture/SoilBeach0078_1_350.jpg"/>
+		<look name="coral_map" gray="1.0" roughness="0.7" metalness="0.3" texture="cad_model_data/environment/corals/texture/coral_map.jpeg"/>
 	</looks>
 
 
     <!-- defining objects in the environment -->
     <static name="Seabed" type="model">
 		<physical>
-			<mesh filename="cad_model_data/ocean_test_data/flat.obj" scale="1.0"/>
+			<mesh filename="cad_model_data/environment/corals/mesh/seabed.obj" scale="1.0"/>
 			<origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0"/>
 		</physical>
 		<material name="Rock"/>
@@ -84,81 +68,6 @@
 		<world_transform rpy="3.14 0 0" xyz="0 0.0 5"/>
 	</static>
 
-
-
-
-
-
-	<!-- <static name="Canister1" type="model">
-		<physical>
-			<mesh filename="cad_model_data/ocean_test_data/gas_canister.obj" scale="1"/>
-			<origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0"/>
-		</physical>
-		<material name="Aluminium"/>
-		<look name="gas_canister"/>
-		<world_transform rpy="0.0 0.0 0.0" xyz="4.0 0.0 5.1"/>
-	</static>
-
-	<static name="Gastank1" type="model">
-		<physical>
-			<mesh filename="cad_model_data/ocean_test_data/gas_tank.obj" scale="1"/>
-			<origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0"/>
-		</physical>
-		<material name="Aluminium"/>
-		<look name="gas_tank"/>
-		<world_transform rpy="-1.57 0.0 0.0" xyz="0.0 -4.0 5.1"/>
-	</static>
-
-	<static name="Gastank2" type="model">
-		<physical>
-			<mesh filename="cad_model_data/ocean_test_data/gas_tank.obj" scale="1"/>
-			<origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0"/>
-		</physical>
-		<material name="Aluminium"/>
-		<look name="gas_tank"/>
-		<world_transform rpy="-1.57 0.0 0.0" xyz="3.0 3.0 5.0"/>
-	</static>
-
-	<static name="Oildrum1" type="model">
-		<physical>
-			<mesh filename="cad_model_data/ocean_test_data/oil_drum.obj" scale="1"/>
-			<origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0"/>
-		</physical>
-		<material name="Aluminium"/>
-		<look name="oil_drum"/>
-		<world_transform rpy="-1.57 0.0 -1.57" xyz="0.0 4.0 5.0"/>
-	</static>
-
-	<static name="Oildrum2" type="model">
-		<physical>
-			<mesh filename="cad_model_data/ocean_test_data/oil_drum.obj" scale="1"/>
-			<origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0"/>
-		</physical>
-		<material name="Aluminium"/>
-		<look name="oil_drum"/>
-		<world_transform rpy="0.0 0.0 -1.57" xyz="-3.0 -3.0 5.1"/>
-	</static>
-
-	<static name="Rustpipe" type="model">
-		<physical>
-			<mesh filename="cad_model_data/ocean_test_data/rust_pipe.obj" scale="1"/>
-			<origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0"/>
-		</physical>
-		<material name="Aluminium"/>
-		<look name="rust_pipe"/>
-		<world_transform rpy="0.0 1.57 1.57" xyz="-4.0 0.0 5.3"/>
-	</static> -->
-
-
-
-
-
-    <!-- change each line for using the fullmesh robot or defined in parts robot -->
-    <!-- <include file="$(find stonefish_qut_rov)/scenarios/rov_mesh_only.scn"> -->
-    <!-- <include file="scenarios/stable_but_unrealistic.scn"> -->
-
-
-
 	<include file="$(find stonefish_qut_rov)/scenarios/main_rov.scn">
 
         <arg name="vehicle_name" value="qut_rov"/>
@@ -166,7 +75,7 @@
         <arg name="orientation" value="0.0 0.0 0.0"/>
 	</include>
 
-	<include file="$(find stonefish_qut_rov)/scenarios/yellow_tang_animated.scn">
+	<include file="$(find stonefish_qut_rov)/scenarios/fish_animated.scn">
 	
 		<arg name="vehicle_name" value="yellow_tang"/>
 		<arg name="position" value="2.0 0.0 4.0"/>
