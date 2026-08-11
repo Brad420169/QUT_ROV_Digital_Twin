@@ -22,6 +22,7 @@ REAL mode automatically starts:
     4. teleop_controller.py  (rov_mode:=real)
 """
 
+import argparse
 import os
 import signal
 import subprocess
@@ -196,9 +197,15 @@ def run_simulation() -> int:
             PACKAGE,
             "sim_interface.py",
         ])
+
         processes.append(("sim_interface", sim_interface))
 
-        time.sleep(INTERFACE_STARTUP_DELAY)
+        time.sleep(1.0)
+
+        print()
+        print("Waiting for Stonefish to finish initialising...")
+        time.sleep(5.0)
+
 
         # ================================================================
         # 4. HIGH-LEVEL TELEOP / AUTONOMY CONTROLLER
@@ -229,15 +236,36 @@ def run_simulation() -> int:
         print("Press Ctrl+C here to stop everything.")
         print()
 
-        return_code = teleop.wait()
+        # ================================================================
+        # 5. WATCHDOG
+        #
+        # Keep rov_control.py alive while both Stonefish and teleop are
+        # running. If either one closes, leave this loop so the finally
+        # block shuts down the rest of the stack automatically.
+        # ================================================================
 
-        if return_code != 0:
-            print(
-                f"teleop_controller exited with code {return_code}",
-                file=sys.stderr,
-            )
+        while True:
+            if stonefish.poll() is not None:
+                print()
+                print("Stonefish has closed.")
+                print("Stopping the remaining simulation nodes...")
+                return stonefish.returncode or 0
 
-        return return_code
+            if teleop.poll() is not None:
+                return_code = teleop.returncode or 0
+
+                if return_code != 0:
+                    print(
+                        f"teleop_controller exited with code {return_code}",
+                        file=sys.stderr,
+                    )
+
+                print()
+                print("Teleop controller has closed.")
+                print("Stopping the remaining simulation nodes...")
+                return return_code
+
+            time.sleep(0.2)
 
     except KeyboardInterrupt:
         print("\nCtrl+C received.")
@@ -408,7 +436,21 @@ def run_real() -> int:
 # ---------------------------------------------------------------------------
 
 def main() -> int:
-    mode = choose_mode()
+    parser = argparse.ArgumentParser(
+        description="QUT ROV control launcher"
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["sim", "real", "s", "r"],
+        help="Start directly in simulation or real ROV mode.",
+    )
+
+    args = parser.parse_args()
+
+    if args.mode is None:
+        mode = choose_mode()
+    else:
+        mode = "s" if args.mode in ("sim", "s") else "r"
 
     if mode == "s":
         return run_simulation()

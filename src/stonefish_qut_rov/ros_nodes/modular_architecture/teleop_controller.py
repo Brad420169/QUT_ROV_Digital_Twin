@@ -81,10 +81,7 @@ class GamepadTeleop(Node):
             self.get_parameter("package_name").value
         )
 
-        # ========================================================
         # VEHICLE COMMAND
-        # ========================================================
-
         self.surge_cmd = 0.0
         self.heave_cmd = 0.0
         self.yaw_cmd = 0.0
@@ -94,10 +91,7 @@ class GamepadTeleop(Node):
         self.fish_heave_cmd = 0.0
         self.fish_yaw_cmd = 0.0
 
-        # ========================================================
         # STATE
-        # ========================================================
-
         self.current_depth = None
         self.target_depth = None
 
@@ -111,25 +105,16 @@ class GamepadTeleop(Node):
         self.trajectory_mode = False
         self.fish_follow_mode = False
 
-        # ========================================================
         # BUTTON EDGES
-        # ========================================================
-
         self._station_pressed_last = False
         self._trajectory_pressed_last = False
         self._camera_pressed_last = False
         self._fish_pressed_last = False
 
-        # ========================================================
         # CAMERA/FISH PROCESS
-        # ========================================================
-
         self._camera_process = None
 
-        # ========================================================
         # PID
-        # ========================================================
-
         self.depth_pid = PIDController(
             kp=DEPTH_KP,
             ki=DEPTH_KI,
@@ -150,10 +135,7 @@ class GamepadTeleop(Node):
             wrap_angle=True,
         )
 
-        # ========================================================
         # ROS
-        # ========================================================
-
         self.command_pub = self.create_publisher(
             Twist,
             CMD_VEL_TOPIC,
@@ -202,10 +184,7 @@ class GamepadTeleop(Node):
 
         self._print_controls()
 
-    # ============================================================
     # SENSOR CALLBACKS
-    # ============================================================
-
     def depth_callback(self, msg: Float64):
         self.current_depth = float(msg.data)
 
@@ -276,10 +255,7 @@ class GamepadTeleop(Node):
             dt=dt,
         )
 
-    # ============================================================
     # FISH FOLLOW COMMAND
-    # ============================================================
-
     def fish_command_callback(self, msg: Twist):
         if not self.fish_follow_mode:
             return
@@ -288,10 +264,7 @@ class GamepadTeleop(Node):
         self.fish_heave_cmd = clamp(float(msg.linear.z))
         self.fish_yaw_cmd = clamp(float(msg.angular.z))
 
-    # ============================================================
     # GAMEPAD
-    # ============================================================
-
     def joy_callback(self, msg: Joy):
         axes = msg.axes
         buttons = msg.buttons
@@ -383,10 +356,7 @@ class GamepadTeleop(Node):
         self._camera_pressed_last = camera_pressed
         self._fish_pressed_last = fish_pressed
 
-    # ============================================================
     # DEPTH KEEPING
-    # ============================================================
-
     def toggle_depth_keeping(self):
         if self.fish_follow_mode:
             self.get_logger().warn(
@@ -429,10 +399,7 @@ class GamepadTeleop(Node):
                 "Depth keeping DISABLED"
             )
 
-    # ============================================================
     # TRAJECTORY
-    # ============================================================
-
     def toggle_trajectory(self):
         if self.fish_follow_mode:
             self.get_logger().warn(
@@ -496,10 +463,7 @@ class GamepadTeleop(Node):
                 "Trajectory DISABLED"
             )
 
-    # ============================================================
     # CAMERA / DETECTOR
-    # ============================================================
-
     def toggle_camera(self):
         if self.rov_mode != "sim":
             self.get_logger().warn(
@@ -567,10 +531,7 @@ class GamepadTeleop(Node):
             "Fish detector/camera closed"
         )
 
-    # ============================================================
     # FISH FOLLOW
-    # ============================================================
-
     def toggle_fish_follow(self):
         if self.rov_mode != "sim":
             self.get_logger().warn(
@@ -625,10 +586,7 @@ class GamepadTeleop(Node):
             f"Fish following {'ENABLED' if enabled else 'DISABLED'}"
         )
 
-    # ============================================================
     # OUTPUT
-    # ============================================================
-
     def publish_command(self):
         msg = Twist()
 
@@ -653,10 +611,7 @@ class GamepadTeleop(Node):
 
         self.publish_command()
 
-    # ============================================================
     # DISPLAY
-    # ============================================================
-
     def _print_controls(self):
         fish_text = (
             "available"

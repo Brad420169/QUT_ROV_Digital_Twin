@@ -58,16 +58,12 @@ from rov_config import (
 )
 from thruster_mixer import VehicleCommand, mix_normalised
 
-# ---------------------------------------------------------------------------
 # MAVROS topics
-# ---------------------------------------------------------------------------
 MAVROS_RC_OVERRIDE_TOPIC    = "/mavros/rc/override"
 MAVROS_PRESSURE_TOPIC       = "/mavros/imu/static_pressure"
 MAVROS_SET_MODE_SERVICE     = "/mavros/set_mode"
 
-# ---------------------------------------------------------------------------
 # RC constants
-# ---------------------------------------------------------------------------
 RC_NEUTRAL_US    = 1500     # µs — ArduSub neutral / stopped
 RC_RANGE_US      = 400      # ±400 µs either side of neutral
 RC_PASSTHROUGH   = 0        # tells ArduSub to ignore this channel override
@@ -92,9 +88,7 @@ class RealInterface(Node):
 
         self.command = VehicleCommand()
 
-        # ----------------------------------------------------------------
         # Publishers
-        # ----------------------------------------------------------------
         self.rc_pub = self.create_publisher(
             OverrideRCIn,
             MAVROS_RC_OVERRIDE_TOPIC,
@@ -107,9 +101,7 @@ class RealInterface(Node):
             10,
         )
 
-        # ----------------------------------------------------------------
         # Subscribers
-        # ----------------------------------------------------------------
         self.cmd_sub = self.create_subscription(
             Twist,
             CMD_VEL_TOPIC,
@@ -124,34 +116,25 @@ class RealInterface(Node):
             10,
         )
 
-        # ----------------------------------------------------------------
         # 20 Hz publish timer (same rate as sim_interface)
-        # ----------------------------------------------------------------
         self.timer = self.create_timer(0.05, self.publish_thrusters)
 
-        # ----------------------------------------------------------------
         # Request MANUAL mode from ArduSub so RC override is accepted
-        # ----------------------------------------------------------------
         threading.Thread(target=self._set_manual_mode, daemon=True).start()
 
         self.get_logger().info(
             "REAL interface ready: surge/heave/yaw -> /mavros/rc/override"
         )
 
-    # --------------------------------------------------------------------
     # Command callback — identical shape to sim_interface
-    # --------------------------------------------------------------------
-
     def command_callback(self, msg: Twist):
         self.command.surge = float(msg.linear.x)
         self.command.heave = float(msg.linear.z)
         self.command.yaw   = float(msg.angular.z)
 
-    # --------------------------------------------------------------------
     # Pressure callback — convert Bar30 reading to depth metres and
     # re-publish on /qut_rov/depth so teleop_controller sees the same
     # topic regardless of mode (identical conversion to sim_interface)
-    # --------------------------------------------------------------------
 
     def pressure_callback(self, msg: FluidPressure):
         gauge_pressure = float(msg.fluid_pressure) - SURFACE_PRESSURE_PA
@@ -191,21 +174,15 @@ class RealInterface(Node):
         ]
         self.rc_pub.publish(msg)
 
-    # --------------------------------------------------------------------
     # Stop — send neutral on all channels (called on shutdown)
-    # --------------------------------------------------------------------
-
     def stop(self):
         msg = OverrideRCIn()
         msg.channels = [RC_NEUTRAL_US] * 8
         self.rc_pub.publish(msg)
         self.get_logger().info("Thrusters zeroed.")
 
-    # --------------------------------------------------------------------
     # Request ArduSub MANUAL mode so RC override commands are obeyed.
     # Runs in a daemon thread so it doesn't block __init__.
-    # --------------------------------------------------------------------
-
     def _set_manual_mode(self):
         client = self.create_client(SetMode, MAVROS_SET_MODE_SERVICE)
 
@@ -230,10 +207,7 @@ class RealInterface(Node):
             )
 
 
-# ---------------------------------------------------------------------------
 # Entry point
-# ---------------------------------------------------------------------------
-
 def main(args=None):
     rclpy.init(args=args)
     node = RealInterface()

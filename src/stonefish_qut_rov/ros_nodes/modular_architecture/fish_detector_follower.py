@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import collections
 import os
 import select
 import sys
@@ -8,7 +7,7 @@ import threading
 import time
 from pathlib import Path
 from threading import Lock, Thread
-from typing import Optional, Sequence, Tuple
+from typing import Optional, Tuple
 
 import cv2
 import numpy as np
@@ -33,7 +32,6 @@ from pid_controller import PIDController
 BUOYANCY_OFFSET = 185.0
 REFERENCE_DIAGONAL_PX = 100.0
 REFERENCE_DISTANCE_M = 1.0
-GRAPH_LEN = 150
 
 TARGET_DISTANCE_M = 1.0
 DISTANCE_DEADBAND_M = 0.1
@@ -55,7 +53,7 @@ class FishDetectorFollower(Node):
         super().__init__("fish_detector_follower")
 
         package_share = Path(get_package_share_directory("stonefish_qut_rov"))
-        default_model_path = package_share / "models" / "yellow_tang_best.pt"
+        default_model_path = package_share / "models" / "stonefish_yolo.pt"
 
         # Detector parameters
         self.declare_parameter("model_path", str(default_model_path))
@@ -159,16 +157,13 @@ class FishDetectorFollower(Node):
         self._locked_detection: Optional[Detection] = None
         self._target_was_lost = False
 
+        # OpenCV display state. If the user closes the window manually,
+        # keep it closed instead of recreating it on the next camera frame.
+        self._display_enabled = True
+        self._window_created = False
+
         self._last_frame_width = 640
         self._last_frame_height = 480
-
-        empty = lambda: collections.deque([0.0] * GRAPH_LEN, maxlen=GRAPH_LEN)
-        self._hist_xerr = empty()
-        self._hist_yerr = empty()
-        self._hist_bl = empty()
-        self._hist_br = empty()
-        self._hist_tl = empty()
-        self._hist_tr = empty()
 
         self._annotated_publisher = self.create_publisher(
             Image, self._output_topic, qos_profile_sensor_data
@@ -519,14 +514,8 @@ class FishDetectorFollower(Node):
         # --------------------------------------------------------------
         # Vehicle-level fish-follow command
         # --------------------------------------------------------------
-        #
-        # The old follower directly generated:
-        #   TL/TR = pitch_command - BUOYANCY_OFFSET
-        #   BL    = forward_pwm + yaw_command
-        #   BR    = forward_pwm - yaw_command
-        #
-        # The clean architecture instead publishes normalised:
-        #   surge, heave, yaw
+
+        # Publishes normalised (0 to 1) surge, heave, yaw commands
         #
         # sim_interface.py performs the final Stonefish mixing.
         surge = float(
@@ -565,8 +554,6 @@ class FishDetectorFollower(Node):
         bl = (surge - yaw) * self._max_pwm
         br = (surge + yaw) * self._max_pwm
 
-        self._update_history(x_error, y_error, bl, br, tl, tr)
-
         self._log_counter += 1
         if self._log_counter % 15 == 0:
             self.get_logger().info(
@@ -585,8 +572,6 @@ class FishDetectorFollower(Node):
     def _stop_for_lost_target(self) -> None:
         self._yaw_pid.reset()
         self._pitch_pid.reset()
-        self._update_history(0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
-
         if self._enabled:
             self._publish_command(0.0, 0.0, 0.0)
 
@@ -652,6 +637,9 @@ class FishDetectorFollower(Node):
         annotated_frame: np.ndarray,
         detection: Optional[Detection],
     ) -> None:
+        if not self._display_enabled:
+            return
+
         debug = annotated_frame.copy()
         height, width = debug.shape[:2]
         centre_x, centre_y = width // 2, height // 2
@@ -705,10 +693,6 @@ class FishDetectorFollower(Node):
             # x_error = cx_fish - centre_x
             # y_error = cy_fish - centre_y
 
-            # bl = self._hist_bl[-1]
-            # br = self._hist_br[-1]
-            # tl = self._hist_tl[-1]
-            # tr = self._hist_tr[-1]
 
             lines = [
                 (f"Distance: {estimated_distance:.2f} m", (0, 255, 255)),
@@ -750,106 +734,29 @@ class FishDetectorFollower(Node):
         interpolation=cv2.INTER_LINEAR
     )
 
-        cv2.imshow("Fish Detector and Follower", display)
-        self._show_graph(width)
+        window_name = "Fish Detector and Follower"
+
+        cv2.imshow(window_name, display)
+        self._window_created = True
         cv2.waitKey(1)
 
-    def _update_history(self, xe, ye, bl, br, tl, tr) -> None:
-        self._hist_xerr.append(xe)
-        self._hist_yerr.append(ye)
-        self._hist_bl.append(bl)
-        self._hist_br.append(br)
-        self._hist_tl.append(tl)
-        self._hist_tr.append(tr)
-
-    @staticmethod
-    def _draw_graph(
-        canvas,
-        data: Sequence[float],
-        colour,
-        y_min: float,
-        y_max: float,
-        row_y: int,
-        row_height: int,
-        label: str,
-    ) -> None:
-        graph_width = canvas.shape[1]
-        values = np.asarray(data, dtype=float)
-
-        def to_pixel(value: float) -> int:
-            fraction = (value - y_min) / (y_max - y_min + 1e-9)
-            return int(row_y + row_height - fraction * row_height)
-
-        points = [
-            (int(index * graph_width / GRAPH_LEN), to_pixel(values[index]))
-            for index in range(len(values))
-        ]
-        for index in range(1, len(points)):
-            cv2.line(canvas, points[index - 1], points[index], colour, 1)
-
-        zero_y = to_pixel(0.0)
-        cv2.line(
-            canvas,
-            (0, zero_y),
-            (graph_width, zero_y),
-            (60, 60, 60),
-            1,
-        )
-        if label:
-            cv2.putText(
-                canvas,
-                label,
-                (4, row_y + 14),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.4,
-                colour,
-                1,
-            )
-
-    def _show_graph(self, width: int) -> None:
-        graph_height = 300
-        graph = np.zeros((graph_height, width, 3), dtype=np.uint8)
-        row_height = graph_height // 3
-
-        self._draw_graph(
-            graph,
-            self._hist_xerr,
-            (0, 255, 255),
-            -width / 2,
-            width / 2,
-            0,
-            row_height,
-            "x_err (px)",
-        )
-        self._draw_graph(
-            graph,
-            self._hist_yerr,
-            (0, 200, 255),
-            -self._last_frame_height / 2,
-            self._last_frame_height / 2,
-            row_height,
-            row_height,
-            "y_err (px)",
-        )
-
-        for history, colour, label in [
-            (self._hist_bl, (180, 255, 100), "BL/BR/TL/TR PWM"),
-            (self._hist_br, (100, 255, 180), ""),
-            (self._hist_tl, (255, 180, 100), ""),
-            (self._hist_tr, (255, 100, 180), ""),
-        ]:
-            self._draw_graph(
-                graph,
-                history,
-                colour,
-                -self._max_pwm,
-                self._max_pwm,
-                row_height * 2,
-                row_height,
-                label,
-            )
-
-        cv2.imshow("Signal Graph", graph)
+        # Clicking the window X destroys the OpenCV window, but the ROS node
+        # keeps receiving frames. Remember that the user closed it so a later
+        # cv2.imshow() call does not recreate it.
+        if self._window_created:
+            try:
+                if cv2.getWindowProperty(
+                    window_name,
+                    cv2.WND_PROP_VISIBLE,
+                ) < 1:
+                    self._display_enabled = False
+                    self._window_created = False
+                    self.get_logger().info(
+                        "Fish detector display closed by user."
+                    )
+            except cv2.error:
+                self._display_enabled = False
+                self._window_created = False
 
     # ------------------------------------------------------------------
     # Fish-follow command publishing and shutdown

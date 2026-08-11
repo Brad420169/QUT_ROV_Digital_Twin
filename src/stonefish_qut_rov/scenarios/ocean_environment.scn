@@ -42,7 +42,7 @@
 
 
     <looks>
-	   	<look name="sand" gray="1.0" roughness="0.7" metalness="0.3" texture="cad_model_data//environment/corals/texture/SoilBeach0078_1_350.jpg"/>
+	   	<look name="sand" gray="1.0" roughness="0.7" metalness="0.3" texture="cad_model_data/environment/corals/texture/SoilBeach0078_1_350.jpg"/>
 		<look name="coral_map" gray="1.0" roughness="0.7" metalness="0.3" texture="cad_model_data/environment/corals/texture/coral_map.jpeg"/>
 	</looks>
 
@@ -60,7 +60,7 @@
 
 	<static name="Coralmap" type="model">
 		<physical>
-			<mesh filename="cad_model_data/corals/mesh/coral_map.obj" scale="0.5"/>
+			<mesh filename="cad_model_data/environment/corals/mesh/coral_map.obj" scale="0.5"/>
 			<origin rpy="0.0 0.0 0.0" xyz="0.0 3.0 0.0"/>
 		</physical>
 		<material name="Neutral"/>

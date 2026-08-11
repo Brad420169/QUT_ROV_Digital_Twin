@@ -124,32 +124,6 @@ def generate_launch_description():
         }.items()
     )
 
-    delayed_debug_print = TimerAction(
-        period=8.0,
-        actions=[
-            LogInfo(msg=['']),
-            LogInfo(msg=['============================================================']),
-            LogInfo(msg=['               STONEFISH LAUNCH CONFIGURATION              ']),
-            LogInfo(msg=['============================================================']),
-            LogInfo(msg=[f"  Environment SCN : {info['environment_scn']}"]),
-            LogInfo(msg=[f"  Included SCN    : {info['included_scn']}"]),
-            LogInfo(msg=['------------------------------------------------------------']),
-            LogInfo(msg=[f"  Vehicle Name    : {info['vehicle_name']}"]),
-            LogInfo(msg=[f"  Spawn Position  : {info['position']}"]),
-            LogInfo(msg=['------------------------------------------------------------']),
-            LogInfo(msg=[f"  Robot Name      : {info['robot_name']}"]),
-            LogInfo(msg=[f"  Base Link Type  : {info['robot_type']}"]),
-            LogInfo(msg=[f"  Physics Type    : {info['physics_type']}"]),
-            LogInfo(msg=[f"  Physical Mesh   : {info['physical_mesh']}"]),
-            LogInfo(msg=[f"  Visual Mesh     : {info['visual_mesh']}"]),
-            LogInfo(msg=[f"  Mass            : {info['mass']}"]),
-            LogInfo(msg=[f"  SCN Path Used   : {pkg_dir}/scenarios/{ENVIRONMENT}.scn"]),
-            LogInfo(msg=['============================================================']),
-            LogInfo(msg=['']),
-        ]
-    )
-
     return LaunchDescription([
         stonefish_launch,
-        delayed_debug_print,
     ])

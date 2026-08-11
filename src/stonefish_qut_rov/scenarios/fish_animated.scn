@@ -6,25 +6,20 @@
               gray="1.0"
               roughness="0.4"
               metalness="0.0"
-              texture="cad_model_data/fish_models/yellow_tang_look.png"/>
+              texture="cad_model_data/environment/fish_models/yellow_tang_look.png"/>
 
         <look name="blue_powder_tang_look"
               gray="1.0"
               roughness="0.4"
               metalness="0.0"
-              texture="cad_model_data/fish_models/blue_tang.png"/>
+              texture="cad_model_data/environment/fish_models/blue_tang.png"/>
 
         <look name="lined_butterflyfish_look"
               gray="1.0"
               roughness="0.4"
               metalness="0.0"
-              texture="cad_model_data/fish_models/lined_butterflyfish.png"/>
+              texture="cad_model_data/environment/fish_models/lined_butterflyfish.png"/>
 
-        <look name="parrot_fish_curacao_look"
-              gray="1.0"
-              roughness="0.4"
-              metalness="0.0"
-              texture="cad_model_data/fish_models/parrot_fish_curacao.png"/>
     </looks>
 
     <!-- ================================================================
@@ -36,7 +31,7 @@
               collisions="false">
 
         <physical>
-            <mesh filename="cad_model_data/fish_models/yellow_tang_test.obj"
+            <mesh filename="cad_model_data/environment/fish_models/yellow_tang_test.obj"
                   scale="1.0"/>
             <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0"/>
         </physical>
@@ -97,7 +92,7 @@
               collisions="false">
 
         <physical>
-            <mesh filename="cad_model_data/fish_models/blue_tang.obj"
+            <mesh filename="cad_model_data/environment/fish_models/blue_tang.obj"
                   scale="0.008"/>
             <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0"/>
         </physical>
@@ -167,7 +162,7 @@
               collisions="false">
 
         <physical>
-            <mesh filename="cad_model_data/fish_models/lined_butterflyfish.obj"
+            <mesh filename="cad_model_data/environment/fish_models/lined_butterflyfish.obj"
                   scale="0.08"/>
             <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0"/>
         </physical>
