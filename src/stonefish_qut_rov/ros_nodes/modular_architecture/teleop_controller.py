@@ -19,6 +19,7 @@ REAL mode:
 import math
 import os
 import signal
+import sys
 import subprocess
 
 import rclpy
@@ -35,6 +36,8 @@ from control_utils import (
 )
 from pid_controller import PIDController
 from rov_config import (
+    CAMERA_SHOW_TOPIC,
+    AXIS_DPAD_Y,
     AXIS_LEFT_STICK_Y,
     AXIS_LEFT_TRIGGER,
     AXIS_RIGHT_STICK_X,
@@ -42,6 +45,7 @@ from rov_config import (
     CAMERA_BUTTON,
     CMD_VEL_TOPIC,
     DEADZONE,
+    DPAD_PRESS_LEVEL,
     DEPTH_FEEDFORWARD,
     DEPTH_INTEGRAL_LIMIT,
     DEPTH_KD,
@@ -54,6 +58,20 @@ from rov_config import (
     FISH_FOLLOW_CMD_TOPIC,
     IMU_TOPIC,
     JOY_TOPIC,
+    PLOTTER_EXECUTABLE,
+    REAL_CAMERA_EXECUTABLE,
+    REAL_SCALE_DEPTH_FF,
+    REAL_SCALE_DEPTH_KD,
+    REAL_SCALE_DEPTH_KI,
+    REAL_SCALE_DEPTH_KP,
+    REAL_SCALE_MANUAL_HEAVE,
+    REAL_SCALE_MANUAL_SURGE,
+    REAL_SCALE_MANUAL_YAW,
+    REAL_SCALE_TRAJ_FORWARD,
+    REAL_SCALE_TRAJ_YAW,
+    REAL_SCALE_YAW_KD,
+    REAL_SCALE_YAW_KI,
+    REAL_SCALE_YAW_KP,
     STATION_KEEPING_BUTTON,
     TRAJECTORY_FORWARD,
     TRAJECTORY_MAX_YAW,
@@ -80,6 +98,12 @@ class GamepadTeleop(Node):
         self.package_name = str(
             self.get_parameter("package_name").value
         )
+
+        # SIM-TO-REAL SCALING
+        # Sim constants are canonical; real mode multiplies them by the
+        # transfer scalers in rov_config.py. Resolved once here so no
+        # control path below has to branch on mode.
+        self._resolve_scaling()
 
         # VEHICLE COMMAND
         self.surge_cmd = 0.0
@@ -110,15 +134,30 @@ class GamepadTeleop(Node):
         self._trajectory_pressed_last = False
         self._camera_pressed_last = False
         self._fish_pressed_last = False
+        self._plot_pressed_last = False
 
         # CAMERA/FISH PROCESS
         self._camera_process = None
 
+        # REAL CAMERA WINDOW
+        # The viewer process runs for the whole session; Y only toggles
+        # window visibility over this topic, so there is no reconnect wait.
+        self._camera_visible = False
+
+        self.camera_show_pub = self.create_publisher(
+            Bool,
+            CAMERA_SHOW_TOPIC,
+            10,
+        )
+
+        # PLOTTER PROCESS
+        self._plot_process = None
+
         # PID
         self.depth_pid = PIDController(
-            kp=DEPTH_KP,
-            ki=DEPTH_KI,
-            kd=DEPTH_KD,
+            kp=self.k_depth_kp,
+            ki=self.k_depth_ki,
+            kd=self.k_depth_kd,
             integral_limit=DEPTH_INTEGRAL_LIMIT,
             output_min=-1.0,
             output_max=1.0,
@@ -126,12 +165,12 @@ class GamepadTeleop(Node):
         )
 
         self.yaw_pid = PIDController(
-            kp=YAW_KP,
-            ki=YAW_KI,
-            kd=YAW_KD,
+            kp=self.k_yaw_kp,
+            ki=self.k_yaw_ki,
+            kd=self.k_yaw_kd,
             integral_limit=YAW_INTEGRAL_LIMIT,
-            output_min=-TRAJECTORY_MAX_YAW,
-            output_max=TRAJECTORY_MAX_YAW,
+            output_min=-self.k_traj_max_yaw,
+            output_max=self.k_traj_max_yaw,
             wrap_angle=True,
         )
 
@@ -182,6 +221,11 @@ class GamepadTeleop(Node):
             self.publish_command,
         )
 
+        self._kill_leftover_viewers()
+
+        if self.rov_mode != "sim":
+            self.start_real_camera_viewer()
+
         self._print_controls()
 
     # SENSOR CALLBACKS
@@ -217,7 +261,7 @@ class GamepadTeleop(Node):
         )
 
         self.heave_cmd = clamp(
-            -pid_output + DEPTH_FEEDFORWARD
+            -pid_output + self.k_depth_ff
         )
 
     def imu_callback(self, msg: Imu):
@@ -270,6 +314,7 @@ class GamepadTeleop(Node):
         buttons = msg.buttons
 
         self._handle_buttons(buttons)
+        self._handle_dpad(axes)
 
         if self.fish_follow_mode:
             return
@@ -289,12 +334,15 @@ class GamepadTeleop(Node):
             return
 
         if self.trajectory_mode:
-            self.surge_cmd = TRAJECTORY_FORWARD
+            self.surge_cmd = self.k_traj_forward
             return
 
-        self.surge_cmd = apply_deadzone(
-            axes[AXIS_LEFT_STICK_Y],
-            DEADZONE,
+        self.surge_cmd = (
+            apply_deadzone(
+                axes[AXIS_LEFT_STICK_Y],
+                DEADZONE,
+            )
+            * self.scale_manual_surge
         )
 
         self.yaw_cmd = (
@@ -303,6 +351,7 @@ class GamepadTeleop(Node):
                 DEADZONE,
             )
             * YAW_MANUAL_SCALE
+            * self.scale_manual_yaw
         )
 
         if not self.depth_keeping:
@@ -315,7 +364,7 @@ class GamepadTeleop(Node):
             )
 
             self.heave_cmd = clamp(
-                ascend - descend
+                (ascend - descend) * self.scale_manual_heave
             )
 
     def _handle_buttons(self, buttons):
@@ -355,6 +404,149 @@ class GamepadTeleop(Node):
         self._trajectory_pressed_last = trajectory_pressed
         self._camera_pressed_last = camera_pressed
         self._fish_pressed_last = fish_pressed
+
+    def _handle_dpad(self, axes):
+        """
+        D-pad up is reported as an axis on this controller
+        (axis 7: up = +1.0, down = -1.0, neutral = 0.0).
+        Rising edge past DPAD_PRESS_LEVEL toggles the plotter.
+        """
+        if len(axes) <= AXIS_DPAD_Y:
+            return
+
+        plot_pressed = axes[AXIS_DPAD_Y] > DPAD_PRESS_LEVEL
+
+        if plot_pressed and not self._plot_pressed_last:
+            self.toggle_plotter()
+
+        self._plot_pressed_last = plot_pressed
+
+    # PLOTTER
+    def toggle_plotter(self):
+        """
+        Start/stop imu_depth_plotter.py. It subscribes to the common
+        /qut_rov/depth and /qut_rov/imu topics, so it is valid in both
+        sim and real mode.
+        """
+        running = (
+            self._plot_process is not None
+            and self._plot_process.poll() is None
+        )
+
+        if not running:
+            self.get_logger().info("Opening depth/IMU plotter...")
+
+            try:
+                self._plot_process = subprocess.Popen(
+                    [
+                        "ros2",
+                        "run",
+                        self.package_name,
+                        PLOTTER_EXECUTABLE,
+                    ],
+                    start_new_session=True,
+                )
+
+            except Exception as error:
+                self._plot_process = None
+                self.get_logger().error(
+                    f"Failed to start plotter: {error}"
+                )
+
+        else:
+            self.close_plotter()
+
+    def close_plotter(self):
+        if self._plot_process is None:
+            return
+
+        if self._plot_process.poll() is None:
+            try:
+                os.killpg(
+                    os.getpgid(self._plot_process.pid),
+                    signal.SIGTERM,
+                )
+                self._plot_process.wait(timeout=2.0)
+
+            except subprocess.TimeoutExpired:
+                os.killpg(
+                    os.getpgid(self._plot_process.pid),
+                    signal.SIGKILL,
+                )
+                self._plot_process.wait()
+
+            except ProcessLookupError:
+                pass
+
+        self._plot_process = None
+        self.get_logger().info("Plotter closed")
+
+    # SIM-TO-REAL SCALING
+    def _scaled(self, value, real_scale):
+        """
+        Sim values are canonical. In real mode they are multiplied by the
+        matching transfer scaler from rov_config.py.
+        """
+        if self.rov_mode == "sim":
+            return value
+
+        return value * real_scale
+
+    def _resolve_scaling(self):
+        """Resolve every scaled constant once, at startup."""
+        is_sim = self.rov_mode == "sim"
+
+        # Manual stick scaling is applied at the command, not the gain.
+        self.scale_manual_surge = 1.0 if is_sim else REAL_SCALE_MANUAL_SURGE
+        self.scale_manual_yaw   = 1.0 if is_sim else REAL_SCALE_MANUAL_YAW
+        self.scale_manual_heave = 1.0 if is_sim else REAL_SCALE_MANUAL_HEAVE
+
+        # Trajectory mode
+        self.k_traj_forward = self._scaled(
+            TRAJECTORY_FORWARD, REAL_SCALE_TRAJ_FORWARD
+        )
+        self.k_traj_max_yaw = self._scaled(
+            TRAJECTORY_MAX_YAW, REAL_SCALE_TRAJ_YAW
+        )
+
+        # Depth hold
+        self.k_depth_kp = self._scaled(DEPTH_KP, REAL_SCALE_DEPTH_KP)
+        self.k_depth_ki = self._scaled(DEPTH_KI, REAL_SCALE_DEPTH_KI)
+        self.k_depth_kd = self._scaled(DEPTH_KD, REAL_SCALE_DEPTH_KD)
+        self.k_depth_ff = self._scaled(
+            DEPTH_FEEDFORWARD, REAL_SCALE_DEPTH_FF
+        )
+
+        # Heading hold
+        self.k_yaw_kp = self._scaled(YAW_KP, REAL_SCALE_YAW_KP)
+        self.k_yaw_ki = self._scaled(YAW_KI, REAL_SCALE_YAW_KI)
+        self.k_yaw_kd = self._scaled(YAW_KD, REAL_SCALE_YAW_KD)
+
+    def _scaling_summary(self):
+        """Scalers that differ from 1.0, for the startup banner."""
+        if self.rov_mode == "sim":
+            return []
+
+        applied = [
+            ("manual surge", REAL_SCALE_MANUAL_SURGE),
+            ("manual yaw",   REAL_SCALE_MANUAL_YAW),
+            ("manual heave", REAL_SCALE_MANUAL_HEAVE),
+            ("traj forward", REAL_SCALE_TRAJ_FORWARD),
+            ("traj yaw",     REAL_SCALE_TRAJ_YAW),
+            ("depth Kp",     REAL_SCALE_DEPTH_KP),
+            ("depth Ki",     REAL_SCALE_DEPTH_KI),
+            ("depth Kd",     REAL_SCALE_DEPTH_KD),
+            ("depth FF",     REAL_SCALE_DEPTH_FF),
+            ("yaw Kp",       REAL_SCALE_YAW_KP),
+            ("yaw Ki",       REAL_SCALE_YAW_KI),
+            ("yaw Kd",       REAL_SCALE_YAW_KD),
+        ]
+
+        return [
+            f"{name} x{scale:g}"
+            for name, scale in applied
+            if scale != 1.0
+        ]
 
     # DEPTH KEEPING
     def toggle_depth_keeping(self):
@@ -428,7 +620,7 @@ class GamepadTeleop(Node):
             self.target_depth = self.current_depth
             self.target_yaw = self.current_yaw
 
-            self.surge_cmd = TRAJECTORY_FORWARD
+            self.surge_cmd = self.k_traj_forward
             self.heave_cmd = 0.0
             self.yaw_cmd = 0.0
 
@@ -464,10 +656,72 @@ class GamepadTeleop(Node):
             )
 
     # CAMERA / DETECTOR
+    def _kill_leftover_viewers(self):
+        """
+        Kill viewers left over from a previous run. teleop can be
+        SIGKILLed by the launcher, which skips the shutdown handler and
+        leaves the camera viewer and plotter running — they then stack
+        up across sessions, each holding its own RTSP connection.
+        """
+        for executable in (REAL_CAMERA_EXECUTABLE, PLOTTER_EXECUTABLE):
+            try:
+                subprocess.run(
+                    ["pkill", "-f", executable],
+                    check=False,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            except Exception as error:
+                self.get_logger().warn(
+                    f"Could not kill leftover {executable}: {error}"
+                )
+
+    def start_real_camera_viewer(self):
+        """
+        Launch the RTSP viewer once, hidden. It holds the stream open for
+        the whole session so the Y button is instant instead of paying
+        connect + first-keyframe cost every time.
+        """
+        self.get_logger().info("Starting camera viewer (hidden)...")
+
+        try:
+            self._camera_process = subprocess.Popen(
+                [
+                    "ros2",
+                    "run",
+                    self.package_name,
+                    REAL_CAMERA_EXECUTABLE,
+                ],
+                start_new_session=True,
+            )
+
+        except Exception as error:
+            self._camera_process = None
+            self.get_logger().error(
+                f"Failed to start camera viewer: {error}"
+            )
+
     def toggle_camera(self):
+        """
+        SIM  — launches/kills the fish detector + camera viewer.
+        REAL — shows/hides the already-running RTSP viewer window.
+        """
         if self.rov_mode != "sim":
-            self.get_logger().warn(
-                "The current camera/fish detector launcher is SIM-only."
+            # Viewer gone (crashed, or killed externally)? Bring it back.
+            if (
+                self._camera_process is None
+                or self._camera_process.poll() is not None
+            ):
+                self.start_real_camera_viewer()
+
+            self._camera_visible = not self._camera_visible
+
+            msg = Bool()
+            msg.data = self._camera_visible
+            self.camera_show_pub.publish(msg)
+
+            self.get_logger().info(
+                "Camera shown" if self._camera_visible else "Camera hidden"
             )
             return
 
@@ -476,30 +730,28 @@ class GamepadTeleop(Node):
             and self._camera_process.poll() is None
         )
 
-        if not running:
-            self.get_logger().info(
-                "Opening fish detector and camera viewer..."
+        if running:
+            self.close_camera_viewer()
+            return
+
+        self.get_logger().info("Opening fish detector and camera viewer...")
+
+        try:
+            self._camera_process = subprocess.Popen(
+                [
+                    "ros2",
+                    "run",
+                    self.package_name,
+                    FISH_FOLLOW_EXECUTABLE,
+                ],
+                start_new_session=True,
             )
 
-            try:
-                self._camera_process = subprocess.Popen(
-                    [
-                        "ros2",
-                        "run",
-                        self.package_name,
-                        FISH_FOLLOW_EXECUTABLE,
-                    ],
-                    start_new_session=True,
-                )
-
-            except Exception as error:
-                self._camera_process = None
-                self.get_logger().error(
-                    f"Failed to start detector: {error}"
-                )
-
-        else:
-            self.close_camera_viewer()
+        except Exception as error:
+            self._camera_process = None
+            self.get_logger().error(
+                f"Failed to start fish detector: {error}"
+            )
 
     def close_camera_viewer(self):
         if self.fish_follow_mode:
@@ -619,24 +871,42 @@ class GamepadTeleop(Node):
             else "disabled"
         )
 
+        plotter_text = "available (sim + real)"
+
         lines = [
             "",
-            "╔══════════════════════════════════════════════╗",
-            "║           SubbyROV Gamepad Teleop            ║",
-            "╠══════════════════════════════════════════════╣",
-            "║ Left stick ↑↓     Surge                      ║",
-            "║ Right stick ←→    Yaw                        ║",
-            "║ RT / LT           Heave up / down            ║",
-            "║ L bumper          Depth keeping              ║",
-            "║ R bumper          Trajectory mode            ║",
-            "║ Y button          Camera/detector             ║",
-            "║ X button          Fish follow                ║",
-            "╠══════════════════════════════════════════════╣",
-            f"║ Mode: {self.rov_mode.upper():<39}║",
-            f"║ Fish follow: {fish_text:<32}║",
-            "╚══════════════════════════════════════════════╝",
+            "\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557",
+            "\u2551           SubbyROV Gamepad Teleop            \u2551",
+            "\u2560\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2563",
+            "\u2551 Left stick \u2191\u2193     Surge                      \u2551",
+            "\u2551 Right stick \u2190\u2192    Yaw                        \u2551",
+            "\u2551 RT / LT           Heave up / down            \u2551",
+            "\u2551 L bumper          Depth keeping              \u2551",
+            "\u2551 R bumper          Trajectory mode            \u2551",
+            "\u2551 Y button          Camera / detector          \u2551",
+            "\u2551 X button          Fish follow                \u2551",
+            "\u2551 D-pad \u2191           Depth / IMU plotter        \u2551",
+            "\u2560\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2563",
+            f"\u2551 Mode: {self.rov_mode.upper():<39}\u2551",
+            f"\u2551 Fish follow: {fish_text:<32}\u2551",
+            f"\u2551 Plotter: {plotter_text:<36}\u2551",
+            "\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d",
             "",
         ]
+
+        scaling = self._scaling_summary()
+
+        if scaling:
+            lines.insert(
+                len(lines) - 2,
+                "\u2551 Real scaling applied:                        \u2551",
+            )
+
+            for entry in scaling:
+                lines.insert(
+                    len(lines) - 2,
+                    f"\u2551   {entry:<43}\u2551",
+                )
 
         for line in lines:
             self.get_logger().info(line)
@@ -645,6 +915,18 @@ class GamepadTeleop(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = GamepadTeleop()
+
+    def shutdown(signum, frame):
+        node.stop()
+        node.close_camera_viewer()
+        node.close_plotter()
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, shutdown)
+    signal.signal(signal.SIGHUP, shutdown)
 
     try:
         rclpy.spin(node)
@@ -655,6 +937,7 @@ def main(args=None):
     finally:
         node.stop()
         node.close_camera_viewer()
+        node.close_plotter()
         node.destroy_node()
 
         if rclpy.ok():

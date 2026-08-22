@@ -37,6 +37,10 @@ from rov_config import (
 
 
 PACKAGE         = "stonefish_qut_rov"
+
+# MAVROS prints a long plugin banner on startup. Send it to a file so the
+# launcher terminal stays readable; tail the file when debugging.
+MAVROS_LOG_FILE = "/tmp/mavros.log"
 SIM_LAUNCH_FILE = "launch_rov.py"
 
 # Startup delays let each part of the ROS stack initialise before
@@ -50,15 +54,33 @@ INTERFACE_STARTUP_DELAY = 0.5
 # Process helpers — unchanged from original
 # ---------------------------------------------------------------------------
 
-def start_process(command: list[str]) -> subprocess.Popen:
+def start_process(
+    command: list[str],
+    log_file: str | None = None,
+) -> subprocess.Popen:
     """
     Start a process in its own process group.
 
     Using a separate process group is important for ros2 launch because
     launch_rov.py starts Stonefish and other child processes. It lets this
     launcher shut down the entire group cleanly with Ctrl+C.
+
+    If log_file is given, stdout and stderr go there instead of this
+    terminal — used for MAVROS, whose plugin banner otherwise buries
+    everything else during startup. Tail it when you need the detail:
+        tail -f /tmp/mavros.log
     """
     print("$", " ".join(command), flush=True)
+
+    if log_file is not None:
+        handle = open(log_file, "w")
+
+        return subprocess.Popen(
+            command,
+            stdout=handle,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
 
     return subprocess.Popen(
         command,
@@ -308,14 +330,19 @@ def run_real() -> int:
         #   /mavros/rc/override          (thruster RC commands)
         # ================================================================
 
-        mavros = start_process([
-            "ros2",
-            "launch",
-            "mavros",
-            "apm.launch",
-            f"fcu_url:={REAL_FCU_URL}",
-        ])
+        mavros = start_process(
+            [
+                "ros2",
+                "launch",
+                "mavros",
+                "apm.launch",
+                f"fcu_url:={REAL_FCU_URL}",
+            ],
+            log_file=MAVROS_LOG_FILE,
+        )
         processes.append(("MAVROS", mavros))
+
+        print(f"MAVROS output -> {MAVROS_LOG_FILE}", flush=True)
 
         print(
             f"Waiting {REAL_MAVROS_STARTUP_DELAY:.0f} s for MAVROS to connect...",

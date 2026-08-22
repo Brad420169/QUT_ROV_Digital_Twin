@@ -26,7 +26,7 @@ from rov_config import (
     SIM_MAX_SETPOINT,
     SIM_PRESSURE_TOPIC,
     SIM_THRUSTER_TOPIC,
-    SURFACE_PRESSURE_PA,
+    SIM_SURFACE_PRESSURE_PA,
     WATER_DENSITY,
 )
 from thruster_mixer import VehicleCommand, mix_to_setpoints
@@ -79,7 +79,7 @@ class SimInterface(Node):
         self.command.yaw = float(msg.angular.z)
 
     def pressure_callback(self, msg: FluidPressure):
-        gauge_pressure = float(msg.fluid_pressure) - SURFACE_PRESSURE_PA
+        gauge_pressure = float(msg.fluid_pressure) - SIM_SURFACE_PRESSURE_PA
         depth = gauge_pressure / (WATER_DENSITY * GRAVITY)
 
         depth_msg = Float64()

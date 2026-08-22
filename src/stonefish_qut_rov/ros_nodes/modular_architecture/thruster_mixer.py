@@ -36,7 +36,6 @@ def mix_normalised(command: VehicleCommand) -> list[float]:
     tl = heave
     tr = heave
 
-    # Preserve the user's old controller sign convention.
     bl = surge - yaw
     br = surge + yaw
 

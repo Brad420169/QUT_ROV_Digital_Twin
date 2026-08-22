@@ -18,12 +18,44 @@ SIM_PRESSURE_TOPIC = "/qut_rov/pressure"
 # MAVROS (REAL ROV) TOPICS
 REAL_RC_OVERRIDE_TOPIC = "/mavros/rc/override"
 REAL_PRESSURE_TOPIC    = "/mavros/imu/static_pressure"
+REAL_IMU_TOPIC         = "/mavros/imu/data"
+REAL_SET_MODE_SERVICE  = "/mavros/set_mode"
+REAL_ARMING_SERVICE    = "/mavros/cmd/arming"
+
+# Set True if a bench yaw test shows real-mode heading rotating the
+# opposite way to the DT for the same physical rotation.
+REAL_YAW_INVERT = False
+REAL_PITCH_INVERT = True
+
+# REAL ROV CAMERA (Z-1Mini, RTSP)
+# Default pod address is 192.168.144.108. Either reconfigure the pod to
+# 192.168.2.3 with GCU_Assistant, or alias the Fathom interface:
+#   sudo ip addr add 192.168.144.1/24 dev enx00e04c680725
+REAL_CAMERA_IP   = "192.168.144.108"
+# lal serves the stream at the bare IP — no path (confirmed by probing
+# the pod: gb_control builds "rtsp://%d.%d.%d.%d" and RtspPath is empty).
+REAL_CAMERA_PATH = ""
+REAL_RTSP_URL    = f"rtsp://{REAL_CAMERA_IP}:554/{REAL_CAMERA_PATH}"
+
+# Window is scaled down from 4K for display.
+REAL_CAMERA_DISPLAY_WIDTH = 1280
+
+# COMMAND WATCHDOG
+# If no /qut_rov/cmd_vel message arrives within this many seconds the
+# interface forces neutral output. Protects against teleop_controller
+# dying mid-run and leaving the last stick command latched.
+COMMAND_TIMEOUT_S = 0.5
 
 # GAMEPAD AXES
 AXIS_LEFT_STICK_Y  = 1
 AXIS_RIGHT_STICK_X = 2
 AXIS_RIGHT_TRIGGER = 4
 AXIS_LEFT_TRIGGER  = 5
+
+# GAMEPAD D-PAD (reported as axes on this controller)
+# Axis 7: up = +1.0, down = -1.0, neutral = 0.0
+AXIS_DPAD_Y        = 7
+DPAD_PRESS_LEVEL   = 0.5
 
 # GAMEPAD BUTTONS
 STATION_KEEPING_BUTTON = 6
@@ -52,10 +84,52 @@ YAW_INTEGRAL_LIMIT = 150.0
 TRAJECTORY_FORWARD = 0.5
 TRAJECTORY_MAX_YAW = 0.3
 
+# ── SIM-TO-REAL TRANSFER ────────────────────────────────────────────
+# Every constant above is the SIM value and stays canonical — the DT is
+# the reference. These scalers adapt those values for the real vehicle,
+# where one normalised unit means different thrust (ArduSub's SimpleROV-4
+# mixer, real thrust curves, real drag, real buoyancy).
+#
+#   1.0  = transfers directly, no correction needed
+#   <1.0 = real vehicle is more responsive than the DT predicts
+#   >1.0 = real vehicle is less responsive than the DT predicts
+#
+# Anything that is not 1.0 is a measured DT fidelity gap — keep this
+# block as the record of where sim and real diverge.
+#
+# Scalers are applied ONLY in real mode; sim always runs unscaled.
+
+# Manual stick commands
+REAL_SCALE_MANUAL_SURGE = 1.0
+REAL_SCALE_MANUAL_YAW   = 1.0
+REAL_SCALE_MANUAL_HEAVE = 1.0
+
+# Trajectory mode
+REAL_SCALE_TRAJ_FORWARD = 0.5
+REAL_SCALE_TRAJ_YAW     = 1.0    # scales the yaw output clamp
+
+# Depth hold. NOTE: scaling a gain changes loop dynamics, not just
+# magnitude — a single factor is only strictly valid if the plant
+# differs by a pure gain, which it will not. Expect these to need
+# individual tuning rather than one shared number.
+REAL_SCALE_DEPTH_KP = 1.0
+REAL_SCALE_DEPTH_KI = 1.0
+REAL_SCALE_DEPTH_KD = 1.0
+
+# Buoyancy trim feedforward. The DT does not model the foam or the
+# tether nose-up trim, so this one is very unlikely to stay at 1.0.
+REAL_SCALE_DEPTH_FF = 1.0
+
+# Heading hold (gains are currently 0.0, so these do nothing yet)
+REAL_SCALE_YAW_KP = 1.0
+REAL_SCALE_YAW_KI = 1.0
+REAL_SCALE_YAW_KD = 1.0
+
 # WATER / DEPTH
 WATER_DENSITY      = 1031.0
 GRAVITY            = 9.81
-SURFACE_PRESSURE_PA = 0.0
+SIM_SURFACE_PRESSURE_PA = 0
+REAL_SURFACE_PRESSURE_PA = 102137.0 # NEED TO CHANGE TO WHATEVER THE ATMOSPHERIC PRESSURE IS AT THE SURFACE (IN PASCALS) WHEN THE ROV IS IN USE!
 
 # SIMULATOR THRUSTER OUTPUT
 SIM_MAX_SETPOINT = 600.0
@@ -74,6 +148,18 @@ REAL_FCU_URL        = f"udp://:14550@{REAL_ROV_IP}:14555"
 # the interface node starts sending RC override messages.
 REAL_MAVROS_STARTUP_DELAY = 5.0
 
-# SIM-ONLY PROCESS NAMES
+# REAL CAMERA WINDOW TOGGLE
+# The viewer starts with teleop and holds the RTSP connection open;
+# the Y button only shows/hides the window, so there is no reconnect
+# delay after the first launch.
+CAMERA_SHOW_TOPIC = "/qut_rov/camera_show"
+
+# PLOTTER
+PLOT_WINDOW_SECONDS = 60.0
+PLOT_REFRESH_MS     = 200
+
+# PROCESS NAMES
 FISH_FOLLOW_EXECUTABLE = "fish_detector_follower.py"
+PLOTTER_EXECUTABLE     = "imu_depth_plotter.py"
+REAL_CAMERA_EXECUTABLE = "camera_viewer_rtsp.py"
 REAL_INTERFACE_EXECUTABLE = "real_interface.py"
