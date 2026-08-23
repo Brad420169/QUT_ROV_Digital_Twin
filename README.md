@@ -1,19 +1,19 @@
 # SubbyROV — Digital Twin to Real Vehicle Control Stack
 
-ROS 2 control stack for the QUT SubbyROV underwater vehicle, built so that
-the **same controller code drives both a Stonefish digital twin and the real
+This ROS 2 control stack for the QUT SubbyROV underwater vehicle was built so that
+the **same controller code can drive both the Digital Twin (DT) and the real
 ROV**. Only the interface layer changes between them.
 
-Part of EGH490 Research Project, QUT.
+This was made for the EGH490 Research Project at QUT.
 
 ---
 
 ## Architecture
 
 Everything hinges on one abstraction: the high-level controller only ever
-publishes vehicle-level commands to `/qut_rov/cmd_vel`, and only ever reads
-sensors from `/qut_rov/depth` and `/qut_rov/imu`. It has no idea whether it
-is driving a simulation or a real vehicle.
+publishes vehicle-level commands to the ROS 2 topic `/qut_rov/cmd_vel`, and only ever reads
+sensor data from `/qut_rov/depth`, `/qut_rov/camera` and `/qut_rov/imu`. 
+The main teleop code is agnostic to whether it is driving a simulation or a real vehicle.
 
 <p align="center">
   <img src="src/stonefish_qut_rov/icons/sim_to_real_interface.png" 
@@ -39,13 +39,10 @@ is driving a simulation or a real vehicle.
 
 ### Thrust allocation is not shared
 
-`thruster_mixer.py` runs in **simulation only**. On the real vehicle,
+`thruster_mixer.py` runs in **simulation only**, translating surge, heave, and yaw commands from a single value into an 1x4 array,
+commanding each thruster to a specific value. However, on the real vehicle, the
 vehicle-level commands go straight to ArduSub's RC channels and the
-Pixhawk's SimpleROV-4 mixer does the allocation.
-
-This is deliberate but worth stating plainly: our mixer is a *model* of
-ArduSub's mixer, not the same code. Allocation fidelity is a known
-sim-to-real gap.
+Pixhawk's SimpleROV-4 automatic mixer, which does the allocation.
 
 ---
 
@@ -55,7 +52,7 @@ sim-to-real gap.
 - ROS 2 Jazzy
 - Stonefish + `stonefish_ros2` (simulation only)
 - MAVROS (real vehicle only)
-- A gamepad (developed against a Zikway HID / GameSir-style controller)
+- A GameSir-style gamepad controller (Developed against a Zikway HID | Or reconfigure rov_config, mapping your desired controller to the ROV's button settings)
 
 ### System packages
 
@@ -85,8 +82,9 @@ pip install opencv-python matplotlib ultralytics
 ## Build
 
 ```bash
+mkdir ros2_ws/src
 cd ~/ros2_ws/src
-git clone <this-repo> stonefish_qut_rov
+git clone github.com/Brad420169/QUT_ROV_Digital_Twin stonefish_qut_rov
 
 cd ~/ros2_ws/src/stonefish_qut_rov/ros_nodes/modular_architecture
 chmod +x *.py
@@ -98,9 +96,8 @@ source install/setup.bash
 
 **The `chmod +x` matters.** `ros2 run` silently reports *"No executable
 found"* for a script without the executable bit, which looks like a missing
-file rather than a permissions problem. If you add a new node, add it to the
-`install(PROGRAMS ...)` block in `CMakeLists.txt` — not `install(FILES ...)`,
-which strips the exec bit.
+file rather than a permissions problem. If you add a new node/python script, add it to the
+`install(PROGRAMS ...)` block in `CMakeLists.txt` and run the build commands again.
 
 ---
 
@@ -137,11 +134,6 @@ nmcli con show
 nmcli con mod "<connection>" +ipv4.addresses 192.168.144.1/24
 nmcli con up "<connection>"
 ```
-
-**Symptom of a missing camera alias:** MAVROS connects fine and the vehicle
-drives, but the camera viewer loops on `No route to host`. The camera is on
-the subnet you forgot.
-
 ---
 
 ## Running
@@ -154,7 +146,7 @@ Then choose `s` for simulation or `r` for the real vehicle. The launcher
 handles startup ordering and shuts the whole stack down on Ctrl+C.
 
 MAVROS output goes to `/tmp/mavros.log` rather than the terminal, since its
-plugin banner otherwise buries everything else during startup:
+plugin banner spams the terminal during startup:
 
 ```bash
 tail -f /tmp/mavros.log
@@ -185,22 +177,10 @@ adapts those values for the real vehicle:
 REAL_SCALE_TRAJ_FORWARD = 0.5    # real vehicle is faster than the DT predicts
 REAL_SCALE_DEPTH_KP     = 1.0    # transfers directly
 ```
-
-`1.0` means the value transfers unchanged. **Anything that is not 1.0 is a
-measured DT fidelity gap**, and this block is intended as the record of
-where simulation and reality diverge.
-
 Scalers apply in real mode only; simulation always runs unscaled. They are
 resolved once at startup in `teleop_controller._resolve_scaling()`, so no
 control path branches on mode. Changing one requires a restart, not just a
 rebuild — the PID objects are constructed with the scaled gains.
-
-One caveat worth understanding: scaling a *command* (like trajectory surge)
-is a clean operation. Scaling a *gain* changes loop dynamics, not just
-magnitude, and is only strictly valid if the plant differs by a pure gain —
-which it will not, given different thrust curves, added mass, and drag.
-Expect the depth gains to need individual tuning rather than one shared
-factor.
 
 ---
 
@@ -265,7 +245,7 @@ dry for long stretches.
 
 - **Command watchdog** — `real_interface.py` forces neutral RC if no
   `cmd_vel` arrives for 0.5 s. Without this, a teleop crash leaves the last
-  stick position latched and the ROV driving indefinitely
+  stick position latched and the ROV driving indefinitely, or until the physical kill switch is activated
 - **Disarm on shutdown** — neutral RC alone leaves the vehicle armed
 - **Orphan cleanup** — teleop clears leftover viewer processes at startup,
   since the launcher can SIGKILL it and skip the shutdown handler
