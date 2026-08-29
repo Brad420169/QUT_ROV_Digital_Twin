@@ -8,6 +8,18 @@ CMD_VEL_TOPIC   = "/qut_rov/cmd_vel"
 DEPTH_TOPIC     = "/qut_rov/depth"
 IMU_TOPIC       = "/qut_rov/imu"
 
+# ARMING (real mode only)
+# teleop asks for a toggle; real_interface owns the truth and reports the
+# resulting state back so the teleop terminal can print it.
+ARM_TOGGLE_TOPIC = "/qut_rov/arm_toggle"
+ARMED_STATE_TOPIC = "/qut_rov/armed"
+
+# BATTERY (real mode only)
+# real_interface republishes the MAVROS battery state on a common topic;
+# teleop prints it on demand.
+BATTERY_TOPIC = "/qut_rov/battery"
+REAL_BATTERY_TOPIC = "/mavros/battery"
+
 FISH_FOLLOW_ENABLE_TOPIC = "/qut_rov/fish_follow_enabled"
 FISH_FOLLOW_CMD_TOPIC    = "/qut_rov/fish_follow_cmd"
 
@@ -57,7 +69,13 @@ AXIS_LEFT_TRIGGER  = 5
 AXIS_DPAD_Y        = 7
 DPAD_PRESS_LEVEL   = 0.5
 
+# D-pad down shuts the whole stack down, so it must be held rather than
+# tapped — a stray thumb should not kill teleop with the ROV in the water.
+DPAD_SHUTDOWN_HOLD_S = 1.0
+
 # GAMEPAD BUTTONS
+ARM_BUTTON             = 0
+BATTERY_BUTTON         = 1
 STATION_KEEPING_BUTTON = 6
 TRAJECTORY_SET_BUTTON  = 7
 CAMERA_BUTTON          = 4
@@ -124,6 +142,33 @@ REAL_SCALE_DEPTH_FF = 1.0
 REAL_SCALE_YAW_KP = 1.0
 REAL_SCALE_YAW_KI = 1.0
 REAL_SCALE_YAW_KD = 1.0
+
+# BATTERY
+# Tattu 2200 mAh 4S LiPo. Percentage is estimated from resting voltage
+# using a per-cell curve — ArduPilot's own remaining-percent needs
+# BATT_CAPACITY set and coulomb counting, which is unreliable here.
+# Under thruster load voltage sags, so a reading taken while driving will
+# understate the true charge.
+BATTERY_CELLS = 4
+
+BATTERY_CELL_CURVE = [
+    (3.00, 0),
+    (3.30, 5),
+    (3.50, 10),
+    (3.60, 20),
+    (3.70, 30),
+    (3.75, 40),
+    (3.80, 50),
+    (3.85, 60),
+    (3.90, 70),
+    (3.95, 80),
+    (4.05, 90),
+    (4.20, 100),
+]
+
+# Below this the pack is either flat or is not a 4S LiPo at all (bench
+# supply, for example), so the percentage is reported as unknown.
+BATTERY_MIN_PLAUSIBLE_V = 11.0
 
 # WATER / DEPTH
 WATER_DENSITY      = 1031.0

@@ -44,15 +44,19 @@ import sys
 
 import rclpy
 from geometry_msgs.msg import Twist
-from mavros_msgs.msg import OverrideRCIn
+from mavros_msgs.msg import OverrideRCIn, State
 from mavros_msgs.srv import CommandBool, SetMode
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
-from sensor_msgs.msg import FluidPressure, Imu
-from std_msgs.msg import Float64
+from sensor_msgs.msg import BatteryState, FluidPressure, Imu
+from std_msgs.msg import Bool, Float64
 from control_utils import quaternion_to_rpy, rpy_to_quaternion
 
 from rov_config import (
+    ARM_TOGGLE_TOPIC,
+    BATTERY_TOPIC,
+    REAL_BATTERY_TOPIC,
+    ARMED_STATE_TOPIC,
     CMD_VEL_TOPIC,
     COMMAND_TIMEOUT_S,
     DEPTH_TOPIC,
@@ -124,6 +128,21 @@ class RealInterface(Node):
             10,
         )
 
+        # Reports the vehicle's actual armed state back to teleop, which
+        # prints it. This node owns the truth — teleop only ever asks for
+        # a toggle, so the two can never disagree.
+        self.armed_pub = self.create_publisher(
+            Bool,
+            ARMED_STATE_TOPIC,
+            10,
+        )
+
+        self.battery_pub = self.create_publisher(
+            BatteryState,
+            BATTERY_TOPIC,
+            10,
+        )
+
         # Subscribers
         self.cmd_sub = self.create_subscription(
             Twist,
@@ -145,6 +164,30 @@ class RealInterface(Node):
             self.imu_callback,
             SENSOR_QOS,
         )
+
+        self.state_sub = self.create_subscription(
+            State,
+            "/mavros/state",
+            self.state_callback,
+            SENSOR_QOS,
+        )
+
+        self.battery_sub = self.create_subscription(
+            BatteryState,
+            REAL_BATTERY_TOPIC,
+            self.battery_callback,
+            SENSOR_QOS,
+        )
+
+        self.arm_toggle_sub = self.create_subscription(
+            Bool,
+            ARM_TOGGLE_TOPIC,
+            self.arm_toggle_callback,
+            10,
+        )
+
+        # Latest armed state from the FCU (None until the first message)
+        self.armed = None
 
         # 20 Hz publish timer (same rate as sim_interface)
         self.timer = self.create_timer(0.05, self.publish_thrusters)
@@ -172,6 +215,65 @@ class RealInterface(Node):
             self.get_logger().info("cmd_vel stream live.")
 
     # ------------------------------------------------------------------
+    # Arming
+    # ------------------------------------------------------------------
+    def state_callback(self, msg: State):
+        """Track the FCU's armed state and republish it on change."""
+        armed = bool(msg.armed)
+
+        if armed == self.armed:
+            return
+
+        self.armed = armed
+
+        out = Bool()
+        out.data = armed
+        self.armed_pub.publish(out)
+
+        self.get_logger().info("ARMED" if armed else "DISARMED")
+
+    def arm_toggle_callback(self, msg: Bool):
+        """
+        Gamepad asked to flip the arm state. This node holds the truth, so
+        the request carries no desired value — we invert what the FCU
+        actually reports.
+        """
+        if self.armed is None:
+            self.get_logger().warn(
+                "No /mavros/state yet — cannot toggle arming."
+            )
+            return
+
+        self._set_arming(not self.armed)
+
+    def _set_arming(self, arm: bool):
+        action = "Arm" if arm else "Disarm"
+
+        client = self.create_client(CommandBool, REAL_ARMING_SERVICE)
+
+        if not client.wait_for_service(timeout_sec=2.0):
+            self.get_logger().warn(
+                f"{action} failed — arming service unavailable."
+            )
+            return
+
+        req = CommandBool.Request()
+        req.value = arm
+
+        future = client.call_async(req)
+        future.add_done_callback(
+            lambda f: self._arming_result(f, action)
+        )
+
+    def _arming_result(self, future, action: str):
+        if future.result() and future.result().success:
+            self.get_logger().info(f"{action} request accepted.")
+        else:
+            self.get_logger().warn(
+                f"{action} request rejected by the FCU."
+            )
+
+    # ------------------------------------------------------------------
     # Sensor bridges -> common topics
     # ------------------------------------------------------------------
     def pressure_callback(self, msg: FluidPressure):
@@ -181,6 +283,10 @@ class RealInterface(Node):
         depth_msg = Float64()
         depth_msg.data = depth
         self.depth_pub.publish(depth_msg)
+
+    def battery_callback(self, msg: BatteryState):
+        """Republish the MAVROS battery state on the common topic."""
+        self.battery_pub.publish(msg)
 
     def imu_callback(self, msg: Imu):
         if not (REAL_PITCH_INVERT or REAL_YAW_INVERT):

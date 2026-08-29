@@ -26,6 +26,7 @@ import rclpy
 from geometry_msgs.msg import Twist
 from rclpy.node import Node
 from sensor_msgs.msg import Imu, Joy
+from sensor_msgs.msg import BatteryState
 from std_msgs.msg import Bool, Float64
 
 from control_utils import (
@@ -36,6 +37,14 @@ from control_utils import (
 )
 from pid_controller import PIDController
 from rov_config import (
+    ARM_BUTTON,
+    BATTERY_BUTTON,
+    BATTERY_CELL_CURVE,
+    BATTERY_CELLS,
+    BATTERY_MIN_PLAUSIBLE_V,
+    BATTERY_TOPIC,
+    ARM_TOGGLE_TOPIC,
+    ARMED_STATE_TOPIC,
     CAMERA_SHOW_TOPIC,
     AXIS_DPAD_Y,
     AXIS_LEFT_STICK_Y,
@@ -46,6 +55,7 @@ from rov_config import (
     CMD_VEL_TOPIC,
     DEADZONE,
     DPAD_PRESS_LEVEL,
+    DPAD_SHUTDOWN_HOLD_S,
     DEPTH_FEEDFORWARD,
     DEPTH_INTEGRAL_LIMIT,
     DEPTH_KD,
@@ -135,9 +145,42 @@ class GamepadTeleop(Node):
         self._camera_pressed_last = False
         self._fish_pressed_last = False
         self._plot_pressed_last = False
+        self._arm_pressed_last = False
+        self._battery_pressed_last = False
+
+        # D-pad down must be HELD to shut down; this is when the current
+        # hold started (None = not held).
+        self._shutdown_hold_start = None
+        self._shutdown_requested = False
 
         # CAMERA/FISH PROCESS
         self._camera_process = None
+
+        # ARMING (real mode only)
+        # teleop only ever asks for a toggle; real_interface owns the
+        # actual state and reports it back on ARMED_STATE_TOPIC.
+        self.arm_toggle_pub = self.create_publisher(
+            Bool,
+            ARM_TOGGLE_TOPIC,
+            10,
+        )
+
+        self.create_subscription(
+            Bool,
+            ARMED_STATE_TOPIC,
+            self.armed_state_callback,
+            10,
+        )
+
+        # BATTERY (real mode only)
+        self.battery = None
+
+        self.create_subscription(
+            BatteryState,
+            BATTERY_TOPIC,
+            self.battery_callback,
+            10,
+        )
 
         # REAL CAMERA WINDOW
         # The viewer process runs for the whole session; Y only toggles
@@ -388,6 +431,16 @@ class GamepadTeleop(Node):
             and buttons[FISH_FOLLOW_BUTTON] == 1
         )
 
+        arm_pressed = (
+            len(buttons) > ARM_BUTTON
+            and buttons[ARM_BUTTON] == 1
+        )
+
+        battery_pressed = (
+            len(buttons) > BATTERY_BUTTON
+            and buttons[BATTERY_BUTTON] == 1
+        )
+
         if station_pressed and not self._station_pressed_last:
             self.toggle_depth_keeping()
 
@@ -400,26 +453,86 @@ class GamepadTeleop(Node):
         if fish_pressed and not self._fish_pressed_last:
             self.toggle_fish_follow()
 
+        if arm_pressed and not self._arm_pressed_last:
+            self.toggle_arming()
+
+        if battery_pressed and not self._battery_pressed_last:
+            self.report_battery()
+
         self._station_pressed_last = station_pressed
         self._trajectory_pressed_last = trajectory_pressed
         self._camera_pressed_last = camera_pressed
         self._fish_pressed_last = fish_pressed
+        self._arm_pressed_last = arm_pressed
+        self._battery_pressed_last = battery_pressed
 
     def _handle_dpad(self, axes):
         """
-        D-pad up is reported as an axis on this controller
+        The D-pad is reported as an axis on this controller
         (axis 7: up = +1.0, down = -1.0, neutral = 0.0).
-        Rising edge past DPAD_PRESS_LEVEL toggles the plotter.
+
+        Up   — rising edge toggles the depth/IMU plotter.
+        Down — must be HELD for DPAD_SHUTDOWN_HOLD_S to shut the stack
+               down, so a stray thumb cannot kill teleop mid-dive.
         """
         if len(axes) <= AXIS_DPAD_Y:
             return
 
-        plot_pressed = axes[AXIS_DPAD_Y] > DPAD_PRESS_LEVEL
+        value = axes[AXIS_DPAD_Y]
+
+        plot_pressed = value > DPAD_PRESS_LEVEL
+        stop_held    = value < -DPAD_PRESS_LEVEL
 
         if plot_pressed and not self._plot_pressed_last:
             self.toggle_plotter()
 
         self._plot_pressed_last = plot_pressed
+
+        self._handle_shutdown_hold(stop_held)
+
+    def _handle_shutdown_hold(self, stop_held: bool):
+        """Track how long D-pad down has been held, and act at the limit."""
+        if self._shutdown_requested:
+            return
+
+        now = self.get_clock().now()
+
+        if not stop_held:
+            if self._shutdown_hold_start is not None:
+                self.get_logger().info("Shutdown cancelled.")
+
+            self._shutdown_hold_start = None
+            return
+
+        if self._shutdown_hold_start is None:
+            self._shutdown_hold_start = now
+            self.get_logger().warn(
+                f"Hold D-pad down for {DPAD_SHUTDOWN_HOLD_S:.0f} s "
+                "to shut down..."
+            )
+            return
+
+        held = (
+            now - self._shutdown_hold_start
+        ).nanoseconds * 1e-9
+
+        if held >= DPAD_SHUTDOWN_HOLD_S:
+            self._shutdown_requested = True
+            self.request_shutdown()
+
+    def request_shutdown(self):
+        """
+        Shut the stack down from the gamepad, exactly as Ctrl+C does.
+
+        Thrusters are zeroed first, then SIGINT is raised on this process
+        so rclpy.spin() unwinds through the normal shutdown path. The
+        launcher's watchdog sees teleop exit and stops everything else.
+        """
+        self.get_logger().warn("D-pad down held — shutting down.")
+
+        self.stop()
+
+        os.kill(os.getpid(), signal.SIGINT)
 
     # PLOTTER
     def toggle_plotter(self):
@@ -480,6 +593,92 @@ class GamepadTeleop(Node):
 
         self._plot_process = None
         self.get_logger().info("Plotter closed")
+
+    # BATTERY
+    def battery_callback(self, msg: BatteryState):
+        self.battery = msg
+
+    @staticmethod
+    def _percent_from_voltage(voltage: float):
+        """
+        Estimate charge from resting pack voltage using a per-cell curve.
+
+        Returns None when the voltage is too low to be a healthy 4S LiPo —
+        a bench supply or a flat pack — rather than reporting a
+        misleading 0%.
+        """
+        if voltage < BATTERY_MIN_PLAUSIBLE_V:
+            return None
+
+        cell = voltage / BATTERY_CELLS
+
+        if cell <= BATTERY_CELL_CURVE[0][0]:
+            return 0.0
+
+        if cell >= BATTERY_CELL_CURVE[-1][0]:
+            return 100.0
+
+        for index in range(1, len(BATTERY_CELL_CURVE)):
+            low_v, low_pct = BATTERY_CELL_CURVE[index - 1]
+            high_v, high_pct = BATTERY_CELL_CURVE[index]
+
+            if cell <= high_v:
+                span = high_v - low_v
+                fraction = 0.0 if span == 0 else (cell - low_v) / span
+                return low_pct + fraction * (high_pct - low_pct)
+
+        return 100.0
+
+    def report_battery(self):
+        """Print the pack state. B button."""
+        if self.rov_mode == "sim":
+            self.get_logger().info("Battery reporting is real-mode only.")
+            return
+
+        if self.battery is None:
+            self.get_logger().warn(
+                "No battery data yet — is MAVROS connected?"
+            )
+            return
+
+        voltage = float(self.battery.voltage)
+        current = float(self.battery.current)
+        cell = voltage / BATTERY_CELLS
+
+        percent = self._percent_from_voltage(voltage)
+
+        if percent is None:
+            level = "n/a (not a 4S pack?)"
+        else:
+            level = f"{percent:.0f}%"
+
+        self.get_logger().info(
+            f"Battery: {voltage:.2f} V  ({cell:.2f} V/cell)  "
+            f"{level}   draw {abs(current):.1f} A"
+        )
+
+        if percent is not None and percent <= 20.0:
+            self.get_logger().warn("Battery low — surface soon.")
+
+    # ARMING
+    def toggle_arming(self):
+        """
+        Ask real_interface to flip the arm state. Nothing is assumed here
+        about what that state currently is — the interface node holds the
+        truth and reports the result back.
+        """
+        if self.rov_mode == "sim":
+            self.get_logger().info("Arming is real-mode only.")
+            return
+
+        self.arm_toggle_pub.publish(Bool())
+
+    def armed_state_callback(self, msg: Bool):
+        """Print the vehicle's armed state as reported by the FCU."""
+        if msg.data:
+            self.get_logger().warn("ARMED — thrusters are live.")
+        else:
+            self.get_logger().info("DISARMED — thrusters inactive.")
 
     # SIM-TO-REAL SCALING
     def _scaled(self, value, real_scale):
@@ -885,7 +1084,10 @@ class GamepadTeleop(Node):
             "\u2551 R bumper          Trajectory mode            \u2551",
             "\u2551 Y button          Camera / detector          \u2551",
             "\u2551 X button          Fish follow                \u2551",
+            "\u2551 A button          Arm / disarm               \u2551",
+            "\u2551 B button          Battery level              \u2551",
             "\u2551 D-pad \u2191           Depth / IMU plotter        \u2551",
+            "\u2551 D-pad \u2193 (hold 1s) Shut down                  \u2551",
             "\u2560\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2563",
             f"\u2551 Mode: {self.rov_mode.upper():<39}\u2551",
             f"\u2551 Fish follow: {fish_text:<32}\u2551",
