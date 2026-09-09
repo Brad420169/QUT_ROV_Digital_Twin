@@ -34,11 +34,6 @@ REAL_IMU_TOPIC         = "/mavros/imu/data"
 REAL_SET_MODE_SERVICE  = "/mavros/set_mode"
 REAL_ARMING_SERVICE    = "/mavros/cmd/arming"
 
-# Set True if a bench yaw test shows real-mode heading rotating the
-# opposite way to the DT for the same physical rotation.
-REAL_YAW_INVERT = False
-REAL_PITCH_INVERT = True
-
 # REAL ROV CAMERA (Z-1Mini, RTSP)
 # Default pod address is 192.168.144.108. Either reconfigure the pod to
 # 192.168.2.3 with GCU_Assistant, or alias the Fathom interface:
@@ -102,46 +97,31 @@ YAW_INTEGRAL_LIMIT = 150.0
 TRAJECTORY_FORWARD = 0.5
 TRAJECTORY_MAX_YAW = 0.3
 
-# ── SIM-TO-REAL TRANSFER ────────────────────────────────────────────
-# Every constant above is the SIM value and stays canonical — the DT is
-# the reference. These scalers adapt those values for the real vehicle,
-# where one normalised unit means different thrust (ArduSub's SimpleROV-4
-# mixer, real thrust curves, real drag, real buoyancy).
-#
-#   1.0  = transfers directly, no correction needed
-#   <1.0 = real vehicle is more responsive than the DT predicts
-#   >1.0 = real vehicle is less responsive than the DT predicts
-#
-# Anything that is not 1.0 is a measured DT fidelity gap — keep this
-# block as the record of where sim and real diverge.
-#
-# Scalers are applied ONLY in real mode; sim always runs unscaled.
-
-# Manual stick commands
-REAL_SCALE_MANUAL_SURGE = 1.0
-REAL_SCALE_MANUAL_YAW   = 1.0
-REAL_SCALE_MANUAL_HEAVE = 1.0
-
-# Trajectory mode
-REAL_SCALE_TRAJ_FORWARD = 0.5
-REAL_SCALE_TRAJ_YAW     = 1.0    # scales the yaw output clamp
-
-# Depth hold. NOTE: scaling a gain changes loop dynamics, not just
-# magnitude — a single factor is only strictly valid if the plant
-# differs by a pure gain, which it will not. Expect these to need
-# individual tuning rather than one shared number.
-REAL_SCALE_DEPTH_KP = 1.0
-REAL_SCALE_DEPTH_KI = 1.0
-REAL_SCALE_DEPTH_KD = 1.0
-
-# Buoyancy trim feedforward. The DT does not model the foam or the
-# tether nose-up trim, so this one is very unlikely to stay at 1.0.
-REAL_SCALE_DEPTH_FF = 1.0
-
-# Heading hold (gains are currently 0.0, so these do nothing yet)
-REAL_SCALE_YAW_KP = 1.0
-REAL_SCALE_YAW_KI = 1.0
-REAL_SCALE_YAW_KD = 1.0
+# SIM-TO-REAL TRANSFER
+# All real-mode tuning lives in sim_to_real_scales.py — that is the only
+# file to edit at the pool. Re-exported here so existing imports of
+# rov_config keep working unchanged.
+from sim_to_real_scales import (          # noqa: E402,F401
+    POOL_WATER_DENSITY,
+    REAL_PITCH_INVERT,
+    REAL_RC_NEUTRAL_US,
+    REAL_RC_RANGE_US,
+    REAL_SCALE_DEPTH_FF,
+    REAL_SCALE_DEPTH_KD,
+    REAL_SCALE_DEPTH_KI,
+    REAL_SCALE_DEPTH_KP,
+    REAL_SCALE_MANUAL_HEAVE,
+    REAL_SCALE_MANUAL_SURGE,
+    REAL_SCALE_MANUAL_YAW,
+    REAL_SCALE_TRAJ_FORWARD,
+    REAL_SCALE_TRAJ_YAW,
+    REAL_SCALE_YAW_KD,
+    REAL_SCALE_YAW_KI,
+    REAL_SCALE_YAW_KP,
+    REAL_SURFACE_PRESSURE_PA,
+    REAL_WATER_DENSITY,
+    REAL_YAW_INVERT,
+)
 
 # BATTERY
 # Tattu 2200 mAh 4S LiPo. Percentage is estimated from resting voltage
@@ -171,17 +151,14 @@ BATTERY_CELL_CURVE = [
 BATTERY_MIN_PLAUSIBLE_V = 11.0
 
 # WATER / DEPTH
-WATER_DENSITY      = 1031.0
+# Density and real surface pressure are set in sim_to_real_scales.py.
+WATER_DENSITY      = REAL_WATER_DENSITY
+FRESH_WATER_DENSITY = POOL_WATER_DENSITY
 GRAVITY            = 9.81
 SIM_SURFACE_PRESSURE_PA = 0
-REAL_SURFACE_PRESSURE_PA = 102137.0 # NEED TO CHANGE TO WHATEVER THE ATMOSPHERIC PRESSURE IS AT THE SURFACE (IN PASCALS) WHEN THE ROV IS IN USE!
 
 # SIMULATOR THRUSTER OUTPUT
 SIM_MAX_SETPOINT = 600.0
-
-# REAL ROV — RC microseconds
-REAL_RC_NEUTRAL_US  = 1500   # stopped / neutral
-REAL_RC_RANGE_US    = 400    # ±400 µs → 1100–1900 µs full range
 
 # REAL ROV — MAVROS / network
 # IP of the ROV-side Fathom-X / M80 on the tether network.

@@ -41,6 +41,7 @@ Prerequisites:
 
 import signal
 import sys
+import time
 
 import rclpy
 from geometry_msgs.msg import Twist
@@ -49,6 +50,7 @@ from mavros_msgs.srv import CommandBool, SetMode
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import BatteryState, FluidPressure, Imu
+from sim_to_real_scales import REAL_INVERT_HEAVE_CMD, REAL_INVERT_SURGE_CMD, REAL_INVERT_YAW_CMD
 from std_msgs.msg import Bool, Float64
 from control_utils import quaternion_to_rpy, rpy_to_quaternion
 
@@ -72,7 +74,7 @@ from rov_config import (
     REAL_YAW_INVERT,
     REAL_PITCH_INVERT,
     REAL_SURFACE_PRESSURE_PA,
-    WATER_DENSITY,
+    FRESH_WATER_DENSITY,
 )
 from control_utils import clamp
 from thruster_mixer import VehicleCommand
@@ -278,7 +280,7 @@ class RealInterface(Node):
     # ------------------------------------------------------------------
     def pressure_callback(self, msg: FluidPressure):
         gauge_pressure = float(msg.fluid_pressure) - REAL_SURFACE_PRESSURE_PA
-        depth = gauge_pressure / (WATER_DENSITY * GRAVITY)
+        depth = gauge_pressure / (FRESH_WATER_DENSITY * GRAVITY)
 
         depth_msg = Float64()
         depth_msg.data = depth
@@ -365,6 +367,13 @@ class RealInterface(Node):
         heave = clamp(self.command.heave)
         yaw   = clamp(self.command.yaw)
 
+        if REAL_INVERT_SURGE_CMD:
+            surge = -surge
+        if REAL_INVERT_HEAVE_CMD:
+            heave = -heave
+        if REAL_INVERT_YAW_CMD:
+            yaw = -yaw
+
         channels = self._neutral_channels()
         channels[2] = normalised_to_rc(heave)   # ch3 — throttle / heave
         channels[3] = normalised_to_rc(yaw)     # ch4 — yaw
@@ -433,33 +442,18 @@ class RealInterface(Node):
     def _mode_response_callback(self, future):
         if future.result() and future.result().mode_sent:
             self.get_logger().info("ArduSub flight mode set to MANUAL.")
-            self._arm_timer = self.create_timer(2.0, self._arm_vehicle)
+
+            if self.armed:
+                self.get_logger().warn(
+                    "Vehicle was ARMED at startup — disarming for a known state."
+                )
+                self._set_arming(False)
+            else:
+                self.get_logger().info("Press A to arm — thrusters are NOT live.")
         else:
             self.get_logger().warn(
                 "set_mode call failed — set MANUAL mode in QGC manually."
             )
-
-    def _arm_vehicle(self):
-        self._arm_timer.cancel()
-
-        arm_client = self.create_client(CommandBool, REAL_ARMING_SERVICE)
-
-        if not arm_client.wait_for_service(timeout_sec=5.0):
-            self.get_logger().warn("Arming service not available.")
-            return
-
-        req = CommandBool.Request()
-        req.value = True
-
-        future = arm_client.call_async(req)
-        future.add_done_callback(self._arm_response_callback)
-
-    def _arm_response_callback(self, future):
-        if future.result() and future.result().success:
-            self.get_logger().info("Vehicle armed — thrusters active.")
-        else:
-            self.get_logger().warn("Arming failed — arm manually via QGC.")
-
 
 # Entry point
 def main(args=None):

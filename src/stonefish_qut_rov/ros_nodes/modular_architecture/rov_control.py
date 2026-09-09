@@ -149,6 +149,31 @@ def choose_mode() -> str:
         print("Please enter 's' or 'r'.")
 
 
+def print_controls(rov_mode: str):
+    fish_text = "AVAILABLE" if rov_mode == "sim" else "DISABLED"
+
+    print()
+    print("╔══════════════════════════════════════════════╗")
+    print("║           SubbyROV Gamepad Teleop            ║")
+    print("╠══════════════════════════════════════════════╣")
+    print("║ Left stick ↑↓     Surge                      ║")
+    print("║ Right stick ←→    Yaw                        ║")
+    print("║ RT / LT           Heave up / down            ║")
+    print("║ L bumper          Depth keeping              ║")
+    print("║ R bumper          Trajectory mode            ║")
+    print("║ Y button          Camera / detector          ║")
+    print("║ X button          Fish follow (Cam Window)   ║")
+    print("║ A button          Arm / disarm               ║")
+    print("║ B button          Battery level              ║")
+    print("║ D-pad ↑           Depth / IMU plotter        ║")
+    print("║ D-pad ↓ (hold 1s) Shut down                  ║")
+    print("╠══════════════════════════════════════════════╣")
+    print(f"║ Mode: {rov_mode.upper():<39}║")
+    print(f"║ Fish follow: {fish_text:<32}║")
+    print("║ Plotter: available (sim + real)              ║")
+    print("╚══════════════════════════════════════════════╝")
+    print()
+
 # ---------------------------------------------------------------------------
 # Simulation mode — unchanged from original
 # ---------------------------------------------------------------------------
@@ -254,7 +279,9 @@ def run_simulation() -> int:
         print("Gamepad:         RUNNING")
         print("Sim interface:   RUNNING")
         print("Teleop control:  RUNNING")
-        print()
+
+        print_controls("sim")
+
         print("Press Ctrl+C here to stop everything.")
         print()
 
@@ -426,9 +453,9 @@ def run_real() -> int:
         print("Gamepad:         RUNNING")
         print("Real interface:  RUNNING")
         print("Teleop control:  RUNNING")
-        print()
-        print("Fish following:  DISABLED  (real mode)")
-        print()
+
+        print_controls("real")
+
         print("Press Ctrl+C here to stop everything.")
         print()
 

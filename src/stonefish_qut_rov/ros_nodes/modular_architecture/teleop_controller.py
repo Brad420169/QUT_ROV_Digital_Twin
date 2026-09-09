@@ -269,7 +269,7 @@ class GamepadTeleop(Node):
         if self.rov_mode != "sim":
             self.start_real_camera_viewer()
 
-        self._print_controls()
+        #self._print_controls()
 
     # SENSOR CALLBACKS
     def depth_callback(self, msg: Float64):
@@ -1061,58 +1061,6 @@ class GamepadTeleop(Node):
         self.yaw_cmd = 0.0
 
         self.publish_command()
-
-    # DISPLAY
-    def _print_controls(self):
-        fish_text = (
-            "available"
-            if self.rov_mode == "sim"
-            else "disabled"
-        )
-
-        plotter_text = "available (sim + real)"
-
-        lines = [
-            "",
-            "\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557",
-            "\u2551           SubbyROV Gamepad Teleop            \u2551",
-            "\u2560\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2563",
-            "\u2551 Left stick \u2191\u2193     Surge                      \u2551",
-            "\u2551 Right stick \u2190\u2192    Yaw                        \u2551",
-            "\u2551 RT / LT           Heave up / down            \u2551",
-            "\u2551 L bumper          Depth keeping              \u2551",
-            "\u2551 R bumper          Trajectory mode            \u2551",
-            "\u2551 Y button          Camera / detector          \u2551",
-            "\u2551 X button          Fish follow                \u2551",
-            "\u2551 A button          Arm / disarm               \u2551",
-            "\u2551 B button          Battery level              \u2551",
-            "\u2551 D-pad \u2191           Depth / IMU plotter        \u2551",
-            "\u2551 D-pad \u2193 (hold 1s) Shut down                  \u2551",
-            "\u2560\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2563",
-            f"\u2551 Mode: {self.rov_mode.upper():<39}\u2551",
-            f"\u2551 Fish follow: {fish_text:<32}\u2551",
-            f"\u2551 Plotter: {plotter_text:<36}\u2551",
-            "\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d",
-            "",
-        ]
-
-        scaling = self._scaling_summary()
-
-        if scaling:
-            lines.insert(
-                len(lines) - 2,
-                "\u2551 Real scaling applied:                        \u2551",
-            )
-
-            for entry in scaling:
-                lines.insert(
-                    len(lines) - 2,
-                    f"\u2551   {entry:<43}\u2551",
-                )
-
-        for line in lines:
-            self.get_logger().info(line)
-
 
 def main(args=None):
     rclpy.init(args=args)

@@ -37,6 +37,7 @@ install(
     ros_nodes/modular_architecture/control_utils.py
     ros_nodes/modular_architecture/thruster_mixer.py
     ros_nodes/modular_architecture/pid_controller.py
+    ros_nodes/modular_architecture/sim_to_real_scales.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
