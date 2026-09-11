@@ -4,3 +4,4 @@
 *.STL filter=lfs diff=lfs merge=lfs -text
 *.OBJ filter=lfs diff=lfs merge=lfs -text
 *.DAE filter=lfs diff=lfs merge=lfs -text
+*.mp4 filter=lfs diff=lfs merge=lfs -text
