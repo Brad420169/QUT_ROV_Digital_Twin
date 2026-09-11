@@ -58,7 +58,9 @@ https://github.com/user-attachments/assets/ffbe256a-3c4d-401d-acdf-2d69c06081ee
 | `imu_depth_plotter.py` | Live depth and roll/pitch/yaw plot. Works in both modes |
 | `camera_viewer_rtsp.py` | RTSP viewer for the real camera (real mode) |
 | `fish_detector_follower.py` | YOLO fish detection and visual servoing (**sim only**) |
-| `rov_config.py` | All topics, gains, button mappings, and sim-to-real scalers |
+| `rov_config.py` | All topics, gains, and button mappings. Sim values are canonical |
+| `sim_to_real_scales.py` | Real-vehicle scalers and hardware constants — the only file you should need to edit at the pool |
+| `control_utils.py` | Shared math helpers: deadzone, clamping, quaternion-to-RPY/yaw |
 
 ### Thrust allocation is not shared
 
@@ -69,49 +71,48 @@ Pixhawk's SimpleROV-4 automatic mixer, which does the allocation.
 
 ---
 
-## Requirements
+## Installation
 
-- Ubuntu 24.04
-- ROS 2 Jazzy
-- Stonefish + `stonefish_ros2` (simulation only)
-- MAVROS (real vehicle only)
-- A GameSir-style gamepad controller (Developed against a Zikway HID | Or reconfigure rov_config, mapping your desired controller to the ROV's button settings)
+Set up in this order: a working Stonefish simulation first, then this repo,
+then — only if you have the physical vehicle — MAVROS and the tether
+network.
 
-### System packages
+### 1. Stonefish simulation
 
-```bash
-sudo apt install \
-    ros-jazzy-mavros ros-jazzy-mavros-extras \
-    ros-jazzy-joy \
-    ffmpeg python3-tk
-```
+A regular [Stonefish](https://github.com/patrykcieslak/stonefish) +
+[`stonefish_ros2`](https://github.com/patrykcieslak/stonefish_ros2) setup,
+nothing custom:
 
-MAVROS needs the GeographicLib datasets installed once:
+1. [ROS 2 Jazzy](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debians.html) on Ubuntu 24.04
+2. Build and install the [Stonefish](https://github.com/patrykcieslak/stonefish) library
+3. Clone [`stonefish_ros2`](https://github.com/patrykcieslak/stonefish_ros2) into a colcon workspace and build it (*match versions between the two*)
 
-```bash
-sudo /opt/ros/jazzy/lib/mavros/install_geographiclib_datasets.sh
-```
+Confirm it launches on its own before moving on — this repo assumes a
+working Stonefish install and won't help you debug that layer.
 
-### Python packages
+### 2. This repo
 
 ```bash
-pip install opencv-python matplotlib ultralytics
-```
-
-`ultralytics` is only needed for `fish_detector_follower.py` (sim mode).
-
----
-
-## Build
-
-```bash
-mkdir ros2_ws/src
+mkdir -p ~/ros2_ws/src
 cd ~/ros2_ws/src
-git clone github.com/Brad420169/QUT_ROV_Digital_Twin stonefish_qut_rov
+git clone https://github.com/Brad420169/QUT_ROV_Digital_Twin stonefish_qut_rov
 
 cd ~/ros2_ws/src/stonefish_qut_rov/ros_nodes/modular_architecture
 chmod +x *.py
+```
 
+System and Python packages (needed in both sim and real mode):
+
+```bash
+sudo apt install ros-jazzy-joy ffmpeg python3-tk
+pip install opencv-python matplotlib ultralytics
+```
+
+`ultralytics` is only used by `fish_detector_follower.py` (sim mode). A
+GameSir-style gamepad is expected (developed against a Zikway HID) —
+reconfigure `rov_config.py`'s button mappings for a different controller.
+
+```bash
 cd ~/ros2_ws
 colcon build --packages-select stonefish_qut_rov
 source install/setup.bash
@@ -122,12 +123,17 @@ found"* for a script without the executable bit, which looks like a missing
 file rather than a permissions problem. If you add a new node/python script, add it to the
 `install(PROGRAMS ...)` block in `CMakeLists.txt` and run the build commands again.
 
----
+### 3. Physical vehicle (skip for simulation-only use)
 
-## Host network setup (real vehicle only)
+MAVROS bridges this stack to the Pixhawk:
 
-**This is not in the repo and must be done on every new machine.** Two
-subnets run over the single Fathom tether link:
+```bash
+sudo apt install ros-jazzy-mavros ros-jazzy-mavros-extras
+sudo /opt/ros/jazzy/lib/mavros/install_geographiclib_datasets.sh
+```
+
+**Host network setup** — not in the repo, and must be redone on every new
+machine. Two subnets run over the single Fathom tether link:
 
 | Device | Address |
 |---|---|
@@ -157,6 +163,10 @@ nmcli con show
 nmcli con mod "<connection>" +ipv4.addresses 192.168.144.1/24
 nmcli con up "<connection>"
 ```
+
+See [Vehicle setup that lives outside this repo](#vehicle-setup-that-lives-outside-this-repo)
+below for ArduSub parameters and camera configuration.
+
 ---
 
 ## Running
@@ -193,7 +203,7 @@ tail -f /tmp/mavros.log
 ## Sim-to-real transfer
 
 Every constant in `rov_config.py` is the **simulation** value and stays
-canonical — the digital twin is the reference. A separate block of scalers
+canonical — the digital twin is the reference. `sim_to_real_scales.py`
 adapts those values for the real vehicle:
 
 ```python
@@ -252,7 +262,7 @@ dry for long stretches.
 
 ## Before every dive
 
-1. **Set `REAL_SURFACE_PRESSURE_PA`** in `rov_config.py` to the atmospheric
+1. **Set `REAL_SURFACE_PRESSURE_PA`** in `sim_to_real_scales.py` to the atmospheric
    pressure measured at the surface *on the day*. Barometric pressure drifts,
    and an error here is a constant depth offset. Sanity check: depth should
    read near zero floating at the surface
