@@ -23,7 +23,7 @@ The main teleop code is agnostic to whether it is driving a simulation or a real
 
 ### Digital Twin and real vehicle side by side
 
-The real ROV in the field, with the Digital Twin running live on the laptop
+The real physical ROV, with the Digital Twin running live on the laptop
 screen in the background:
 
 <p align="center">
@@ -32,9 +32,17 @@ screen in the background:
        width="100%">
 </p>
 
-A demonstration of the Digital Twin's functions is available at
-[`src/stonefish_qut_rov/icons/DT_Functions.mp4`](src/stonefish_qut_rov/icons/DT_Functions.mp4)
-(tracked via Git LFS).
+### Digital Twin Functions
+Here is a demonstration of the Digital Twin in the simulation.
+The Twin performs:
+- Teleoperation
+- Station Keeping
+- Trajectory Setting
+- Fish Detection and Tracking
+
+All within a simulated 3D coral environment.
+
+https://github.com/user-attachments/assets/ffbe256a-3c4d-401d-acdf-2d69c06081ee
 
 ### Nodes
 
