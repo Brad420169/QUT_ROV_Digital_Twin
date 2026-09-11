@@ -376,8 +376,13 @@ class RealInterface(Node):
 
         channels = self._neutral_channels()
         channels[2] = normalised_to_rc(heave)   # ch3 — throttle / heave
-        channels[3] = normalised_to_rc(yaw)     # ch4 — yaw
-        channels[4] = normalised_to_rc(surge)   # ch5 — forward / surge
+        # channels[3] = normalised_to_rc(yaw)     # ch4 — yaw
+        # channels[4] = normalised_to_rc(surge)   # ch5 — forward / surge
+
+        channels[3] = normalised_to_rc(surge)   # ch5 — forward / surge
+        channels[4] = normalised_to_rc(yaw)   # ch5 — forward / surge
+
+
 
         msg.channels = channels
         self.rc_pub.publish(msg)

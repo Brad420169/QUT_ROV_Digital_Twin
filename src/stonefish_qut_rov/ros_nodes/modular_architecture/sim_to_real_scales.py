@@ -40,7 +40,7 @@ REAL_INVERT_YAW_CMD   = False
 # Depth is computed relative to this, so if it is wrong every depth
 # reading and the whole depth-hold loop is offset. Read it off the
 # plotter or QGC before the ROV goes in and set it here.
-REAL_SURFACE_PRESSURE_PA = 102137.0
+REAL_SURFACE_PRESSURE_PA = 108910
 
 # Water density (kg/m^3). 1031 is seawater; a chlorinated pool is much
 # closer to fresh water — set 998.0 for a pool trial.

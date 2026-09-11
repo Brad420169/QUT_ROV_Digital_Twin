@@ -58,6 +58,33 @@ def quaternion_to_roll_pitch(x: float, y: float, z: float, w: float):
     return roll, pitch
 
 
+# ─────────────────────────────────────────────────────────────────────
+# ZEROING
+# The plotter is spawned fresh each time it is toggled on (D-pad up),
+# so the first IMU sample after launch becomes the datum and every
+# trace starts at 0. Toggle off/on to re-zero at the current attitude.
+#
+# Display only — teleop_controller subscribes to IMU_TOPIC directly and
+# is unaffected by anything here.
+#
+# Yaw: absolute heading is arbitrary, so relative is almost always what
+# you want. Leave True.
+ZERO_YAW = True
+
+# Roll/pitch: absolute IS meaningful — a few degrees of static nose-up
+# from tether drag is a real sim-to-real discrepancy worth seeing.
+# Zeroing hides it. Set False to keep roll/pitch absolute.
+ZERO_ROLL_PITCH = True
+
+# ─────────────────────────────────────────────────────────────────────
+# WHICH TRACES TO PLOT
+# Data for all three is always collected — these only control what is
+# drawn, so flipping one back on needs no other change.
+SHOW_ROLL  = False
+SHOW_PITCH = True
+SHOW_YAW   = False
+
+
 class PlotterNode(Node):
     def __init__(self):
         super().__init__("imu_depth_plotter")
@@ -72,6 +99,10 @@ class PlotterNode(Node):
         self.roll_v = deque()
         self.pitch_v = deque()
         self.yaw_v = deque()
+
+        # (roll, pitch, yaw) in degrees, captured on the first IMU
+        # sample. None until then.
+        self.datum = None
 
         self.create_subscription(
             Float64,
@@ -123,11 +154,27 @@ class PlotterNode(Node):
         roll, pitch = quaternion_to_roll_pitch(q.x, q.y, q.z, q.w)
         yaw = quaternion_to_yaw(q.x, q.y, q.z, q.w)
 
+        r = math.degrees(roll)
+        p = math.degrees(pitch)
+        y = math.degrees(yaw)
+
         with self.lock:
+            if self.datum is None:
+                self.datum = (r, p, y)
+
+            if ZERO_ROLL_PITCH:
+                r -= self.datum[0]
+                p -= self.datum[1]
+
+            if ZERO_YAW:
+                # Wrap to +-180 so zeroing near the +-180 boundary does
+                # not throw a full 360 jump into the trace.
+                y = (y - self.datum[2] + 180.0) % 360.0 - 180.0
+
             self.imu_t.append(self._elapsed())
-            self.roll_v.append(math.degrees(roll))
-            self.pitch_v.append(math.degrees(pitch))
-            self.yaw_v.append(math.degrees(yaw))
+            self.roll_v.append(r)
+            self.pitch_v.append(p)
+            self.yaw_v.append(y)
             self._trim(self.imu_t, self.roll_v, self.pitch_v, self.yaw_v)
 
     def snapshot(self):
@@ -167,13 +214,41 @@ def main(args=None):
     ax_depth.grid(True, alpha=0.3)
     ax_depth.legend(loc="upper right")
 
-    roll_line,  = ax_imu.plot([], [], color="tab:red",   label="roll")
-    pitch_line, = ax_imu.plot([], [], color="tab:green", label="pitch")
+    roll_line,  = ax_imu.plot([], [], color="tab:red",    label="roll")
+    pitch_line, = ax_imu.plot([], [], color="tab:green",  label="pitch")
     yaw_line,   = ax_imu.plot([], [], color="tab:orange", label="yaw")
-    ax_imu.set_ylabel("Angle (deg)")
+
+    roll_line.set_visible(SHOW_ROLL)
+    pitch_line.set_visible(SHOW_PITCH)
+    yaw_line.set_visible(SHOW_YAW)
+
+    # Label only reflects the traces actually shown
+    _rp = "rel" if ZERO_ROLL_PITCH else "abs"
+    _y = "rel" if ZERO_YAW else "abs"
+    _bits = []
+    if SHOW_ROLL:
+        _bits.append(f"roll {_rp}")
+    if SHOW_PITCH:
+        _bits.append(f"pitch {_rp}")
+    if SHOW_YAW:
+        _bits.append(f"yaw {_y}")
+    ax_imu.set_ylabel(
+        "Angle (deg)  " + ", ".join(_bits) if _bits else "Angle (deg)"
+    )
+
     ax_imu.set_xlabel("Time (s)")
     ax_imu.grid(True, alpha=0.3)
-    ax_imu.legend(loc="upper right")
+
+    # Legend carries only the visible traces
+    _handles = [
+        ln for ln, on in (
+            (roll_line, SHOW_ROLL),
+            (pitch_line, SHOW_PITCH),
+            (yaw_line, SHOW_YAW),
+        ) if on
+    ]
+    if _handles:
+        ax_imu.legend(handles=_handles, loc="upper right")
 
     def update(_frame):
         dt_, dv, it, rv, pv, yv = node.snapshot()
@@ -199,8 +274,17 @@ def main(args=None):
             pad = max(0.1, (hi - lo) * 0.2)
             ax_depth.set_ylim(hi + pad, lo - pad)   # inverted
 
-        if rv or pv or yv:
-            allv = rv + pv + yv
+        # Autoscale on visible traces only — a hidden yaw swing must not
+        # squash the pitch trace.
+        allv = []
+        if SHOW_ROLL:
+            allv += rv
+        if SHOW_PITCH:
+            allv += pv
+        if SHOW_YAW:
+            allv += yv
+
+        if allv:
             lo, hi = min(allv), max(allv)
             pad = max(5.0, (hi - lo) * 0.15)
             ax_imu.set_ylim(lo - pad, hi + pad)
