@@ -2,7 +2,7 @@
 
 This ROS 2 control stack for the QUT SubbyROV underwater vehicle was built so that
 the **same controller code can drive both the Digital Twin (DT) and the real
-ROV**. Only the interface layer changes between them.
+ROV**, accelerating autonomy development.
 
 This was made for the EGH490 Research Project at QUT.
 
@@ -23,7 +23,7 @@ The main teleop code is agnostic to whether it is driving a simulation or a real
 
 ### Digital Twin and real vehicle side by side
 
-The real physical ROV, with the Digital Twin running live on the laptop
+The real physical ROV, with the Digital Twin displayed on the laptop
 screen in the background:
 
 <p align="center">
@@ -40,7 +40,7 @@ The Twin performs:
 - Trajectory Setting
 - Fish Detection and Tracking
 
-All within a simulated 3D coral environment.
+All within a simulated 3D coral reef environment.
 
 https://github.com/user-attachments/assets/ffbe256a-3c4d-401d-acdf-2d69c06081ee
 
@@ -59,7 +59,7 @@ https://github.com/user-attachments/assets/ffbe256a-3c4d-401d-acdf-2d69c06081ee
 | `camera_viewer_rtsp.py` | RTSP viewer for the real camera (real mode) |
 | `fish_detector_follower.py` | YOLO fish detection and visual servoing (**sim only**) |
 | `rov_config.py` | All topics, gains, and button mappings. Sim values are canonical |
-| `sim_to_real_scales.py` | Real-vehicle scalers and hardware constants — the only file you should need to edit at the pool |
+| `sim_to_real_scales.py` | Real-vehicle scalers and hardware constants — used for determining any sim-to-real gaps during pool trials |
 | `control_utils.py` | Shared math helpers: deadzone, clamping, quaternion-to-RPY/yaw |
 
 ### Thrust allocation is not shared
@@ -196,7 +196,10 @@ tail -f /tmp/mavros.log
 | R bumper | Trajectory mode |
 | Y button | Camera / detector |
 | X button | Fish follow (sim only) |
+| B button | Battery Percentage |
+| A button | Arm / Disarm Thrusters |
 | D-pad up | Depth / IMU plotter |
+| D-pad down | Hold for one second to close the program |
 
 ---
 
@@ -254,9 +257,7 @@ rtsp://192.168.144.108:554/
 
 Thermals: the SoC throttles at **80 °C** (first trip point; 105 and 120
 follow). Above `TempHigh: 80` the pod drops from 30 fps to 5 fps to cool
-itself. It runs hot on the bench in still air — this is much less of a
-problem submerged, where water carries the heat away. Don't leave it running
-dry for long stretches.
+itself.
 
 ---
 
@@ -266,10 +267,8 @@ dry for long stretches.
    pressure measured at the surface *on the day*. Barometric pressure drifts,
    and an error here is a constant depth offset. Sanity check: depth should
    read near zero floating at the surface
-2. **Confirm the vehicle is disarmed** before launching. The stack disarms on
-   shutdown, but a crash can leave it armed
-3. **Check roll and pitch read near zero** with the ROV level
-4. Dry-run the stack with thrusters disconnected to confirm MAVROS reports
+2. **Check roll and pitch read near zero** with the ROV level
+3. Dry-run the stack with thrusters disconnected to confirm MAVROS reports
    ArduSub capabilities properly
 
 ---
@@ -279,6 +278,7 @@ dry for long stretches.
 - **Command watchdog** — `real_interface.py` forces neutral RC if no
   `cmd_vel` arrives for 0.5 s. Without this, a teleop crash leaves the last
   stick position latched and the ROV driving indefinitely, or until the physical kill switch is activated
+- **Arm/Disarm Button** — The vehicle will only respond to movement commands when armed
 - **Disarm on shutdown** — neutral RC alone leaves the vehicle armed
 - **Orphan cleanup** — teleop clears leftover viewer processes at startup,
   since the launcher can SIGKILL it and skip the shutdown handler
@@ -286,16 +286,6 @@ dry for long stretches.
 ---
 
 ## Known issues
-
-- **Yaw drifts** (~4°/s stationary) until the compass is calibrated.
-  `YAW_KP/KI/KD` are currently `0.0`, so trajectory mode holds depth and
-  drives forward but does not yet hold heading
-- **`REAL_PITCH_INVERT = True`** compensates for a pitch sign difference
-  between the DT and the real vehicle. Worth confirming whether the root
-  cause is a genuine convention difference or `AHRS_ORIENTATION`
 - **`DEPTH_FEEDFORWARD`** is fitted to the digital twin's buoyancy. The real
   vehicle has unmodelled foam and tether trim, so
   `REAL_SCALE_DEPTH_FF` is unlikely to stay at `1.0`
-- **Flat module imports** — nodes use `from rov_config import ...` rather
-  than a proper Python package, which relies on the install directory being
-  on `PYTHONPATH`
