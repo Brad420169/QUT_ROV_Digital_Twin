@@ -1,6 +1,6 @@
 """Reusable PID controller."""
 
-import math
+from control_utils import wrap_to_pi
 
 
 class PIDController:
@@ -29,10 +29,6 @@ class PIDController:
         self._integral = 0.0
         self._prev_measurement = None
 
-    @staticmethod
-    def _wrap_to_pi(angle: float) -> float:
-        return (angle + math.pi) % (2.0 * math.pi) - math.pi
-
     def compute(
         self,
         setpoint: float,
@@ -45,7 +41,7 @@ class PIDController:
 
         error = setpoint - measurement
         if self.wrap_angle:
-            error = self._wrap_to_pi(error)
+            error = wrap_to_pi(error)
 
         p_term = self.kp * error
 
@@ -63,7 +59,7 @@ class PIDController:
             d_measurement = measurement - self._prev_measurement
 
             if self.wrap_angle:
-                d_measurement = self._wrap_to_pi(d_measurement)
+                d_measurement = wrap_to_pi(d_measurement)
 
             d_term = -self.kd * (d_measurement / dt)
 

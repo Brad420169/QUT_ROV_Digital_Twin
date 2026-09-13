@@ -1,0 +1,50 @@
+[INFO] Welcome to Stonefish 1.6.
+[INFO] Window created. OpenGL 4.3 contexts created.
+[INFO] Checking GPU capabilities...
+[INFO] Number of texture units available: 192
+[INFO] Maximum texture size: 32768
+[INFO] Maximum number of texture layers: 2048
+[INFO] Maximum number of fragment shader uniforms: 4096
+[INFO] Setting up OpenGL...
+[INFO] Loaded texture from: /usr/local/share/Stonefish/shaders/logo_64.png
+[INFO] Initializing rendering pipeline:
+[INFO] Loading GUI...
+[INFO] Loaded texture from: /usr/local/share/Stonefish/shaders/logo_gray_64.png
+[INFO] Loaded texture from: /usr/local/share/Stonefish/shaders/gui.png
+[INFO] Initialising OpenGL rendering pipeline...
+[INFO] Loading shaders...
+[INFO] Loaded texture from: /usr/local/share/Stonefish/shaders/flake.png
+[INFO] Initializing simulation:
+[INFO] Building scenario...
+[INFO] Loaded precomputed atmosphere model (20 wavelengths, 5 scattering orders)
+[INFO] Scenario parser: Loading scenario from '/home/brad/Desktop/EGH490/ros2_ws/install/stonefish_qut_rov/share/stonefish_qut_rov/scenarios/ocean_environment.scn'.
+[INFO] Scenario parser: Including file '/home/brad/Desktop/EGH490/ros2_ws/install/stonefish_qut_rov/share/stonefish_qut_rov/scenarios/full_mesh_only_rov.scn'
+[INFO] Generating ocean waves...
+[INFO] Material HullMat (0) created.
+[INFO] Material FoamMat (1) created.
+[INFO] Material ElectronicsMat (2) created.
+[INFO] Material Neutral (3) created.
+[INFO] Material Rock (4) created.
+[INFO] Material Fiberglass (5) created.
+[INFO] Material Aluminium (6) created.
+[INFO] Loaded texture from: /home/brad/Desktop/EGH490/ros2_ws/install/stonefish_qut_rov/share/stonefish_qut_rov/cad_model_data/ocean_test_data/SoilBeach0078_1_350.jpg
+[INFO] Loaded texture from: /home/brad/Desktop/EGH490/ros2_ws/install/stonefish_qut_rov/share/stonefish_qut_rov/cad_model_data/ocean_test_data/gas_canister.png
+[INFO] Loaded texture from: /home/brad/Desktop/EGH490/ros2_ws/install/stonefish_qut_rov/share/stonefish_qut_rov/cad_model_data/ocean_test_data/gas_tank.png
+[INFO] Loaded texture from: /home/brad/Desktop/EGH490/ros2_ws/install/stonefish_qut_rov/share/stonefish_qut_rov/cad_model_data/ocean_test_data/oil_drum.png
+[INFO] Loaded texture from: /home/brad/Desktop/EGH490/ros2_ws/install/stonefish_qut_rov/share/stonefish_qut_rov/cad_model_data/ocean_test_data/rust_pipe.png
+[INFO] Loaded texture from: /home/brad/Desktop/EGH490/ros2_ws/install/stonefish_qut_rov/share/stonefish_qut_rov/cad_model_data/ocean_test_data/anode_d.png
+[INFO] Loaded texture from: /home/brad/Desktop/EGH490/ros2_ws/install/stonefish_qut_rov/share/stonefish_qut_rov/cad_model_data/ocean_test_data/Turbine_Base_Diffuse.png
+[INFO] Loaded texture from: /home/brad/Desktop/EGH490/ros2_ws/install/stonefish_qut_rov/share/stonefish_qut_rov/cad_model_data/ocean_test_data/Turbine_Main_Diffuse.png
+[INFO] Loading geometry from: /home/brad/Desktop/EGH490/ros2_ws/install/stonefish_qut_rov/share/stonefish_qut_rov/cad_model_data/ocean_test_data/flat.obj
+[INFO] Loaded mesh with 20000 faces in 17 ms.
+[INFO] Loading geometry from: /home/brad/Desktop/EGH490/ros2_ws/install/stonefish_qut_rov/share/stonefish_qut_rov/cad_model_data/ocean_test_data/gas_canister.obj
+[INFO] Loaded mesh with 2504 faces in 3 ms.
+[INFO] Loading geometry from: /home/brad/Desktop/EGH490/ros2_ws/install/stonefish_qut_rov/share/stonefish_qut_rov/cad_model_data/ocean_test_data/gas_tank.obj
+[INFO] Loaded mesh with 2668 faces in 3 ms.
+[INFO] Loading geometry from: /home/brad/Desktop/EGH490/ros2_ws/install/stonefish_qut_rov/share/stonefish_qut_rov/cad_model_data/ocean_test_data/gas_tank.obj
+[INFO] Loaded mesh with 2668 faces in 3 ms.
+[INFO] Loading geometry from: /home/brad/Desktop/EGH490/ros2_ws/install/stonefish_qut_rov/share/stonefish_qut_rov/cad_model_data/ocean_test_data/oil_drum.obj
+[INFO] Loaded mesh with 892 faces in 1 ms.
+[INFO] Loading geometry from: /home/brad/Desktop/EGH490/ros2_ws/install/stonefish_qut_rov/share/stonefish_qut_rov/cad_model_data/ocean_test_data/oil_drum.obj
+[INFO] Loaded mesh with 892 faces in 1 ms.
+[INFO] Loading geometry from: /home/brad/Desktop/EGH490/ros2_ws/[ros2run]: Aborted

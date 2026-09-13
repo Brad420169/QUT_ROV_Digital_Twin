@@ -19,7 +19,6 @@ Standalone (window opens immediately):
 
 import os
 import signal
-import sys
 import threading
 import time
 
@@ -35,6 +34,7 @@ os.environ.setdefault(
 import cv2
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, DurabilityPolicy
 from std_msgs.msg import Bool
 
 from rov_config import (
@@ -127,7 +127,7 @@ class ViewerNode(Node):
             Bool,
             CAMERA_SHOW_TOPIC,
             self.show_callback,
-            10,
+            QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL),
         )
 
         self.get_logger().info(
@@ -155,12 +155,10 @@ def main(args=None):
     )
     spin_thread.start()
 
+    requested = threading.Event()
+
     def shutdown(signum, frame):
-        grabber.stop()
-        cv2.destroyAllWindows()
-        if rclpy.ok():
-            rclpy.shutdown()
-        sys.exit(0)
+        requested.set()
 
     signal.signal(signal.SIGTERM, shutdown)   # kill / pkill
     signal.signal(signal.SIGHUP, shutdown)    # terminal closed
@@ -168,7 +166,7 @@ def main(args=None):
     window_open = False
 
     try:
-        while rclpy.ok():
+        while rclpy.ok() and not requested.is_set():
             if node.show:
                 if not window_open:
                     cv2.namedWindow(WINDOW, cv2.WINDOW_NORMAL)
@@ -216,10 +214,10 @@ def main(args=None):
     finally:
         grabber.stop()
         cv2.destroyAllWindows()
-        node.destroy_node()
-
         if rclpy.ok():
             rclpy.shutdown()
+        spin_thread.join(timeout=2.0)
+        node.destroy_node()
 
 
 if __name__ == "__main__":

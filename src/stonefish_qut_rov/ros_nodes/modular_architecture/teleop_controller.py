@@ -17,10 +17,6 @@ REAL mode:
 """
 
 import math
-import os
-import signal
-import sys
-import subprocess
 
 import rclpy
 from geometry_msgs.msg import Twist
@@ -36,16 +32,16 @@ from control_utils import (
     trigger_to_command,
 )
 from pid_controller import PIDController
+from command_watchdog import Freshness
+from node_lifecycle import run_node
+from viewer_manager import ViewerManager
+from battery_status import report_battery
 from rov_config import (
     ARM_BUTTON,
     BATTERY_BUTTON,
-    BATTERY_CELL_CURVE,
-    BATTERY_CELLS,
-    BATTERY_MIN_PLAUSIBLE_V,
     BATTERY_TOPIC,
     ARM_TOGGLE_TOPIC,
     ARMED_STATE_TOPIC,
-    CAMERA_SHOW_TOPIC,
     AXIS_DPAD_Y,
     AXIS_LEFT_STICK_Y,
     AXIS_LEFT_TRIGGER,
@@ -64,12 +60,12 @@ from rov_config import (
     DEPTH_TOPIC,
     FISH_FOLLOW_BUTTON,
     FISH_FOLLOW_ENABLE_TOPIC,
-    FISH_FOLLOW_EXECUTABLE,
     FISH_FOLLOW_CMD_TOPIC,
     IMU_TOPIC,
     JOY_TOPIC,
-    PLOTTER_EXECUTABLE,
-    REAL_CAMERA_EXECUTABLE,
+    JOY_TIMEOUT_S,
+    SENSOR_TIMEOUT_S,
+    FISH_COMMAND_TIMEOUT_S,
     REAL_SCALE_DEPTH_FF,
     REAL_SCALE_DEPTH_KD,
     REAL_SCALE_DEPTH_KI,
@@ -108,6 +104,18 @@ class GamepadTeleop(Node):
         self.package_name = str(
             self.get_parameter("package_name").value
         )
+
+        if self.rov_mode not in ("sim", "real"):
+            raise ValueError("rov_mode must be sim or real")
+        self.inputs = {
+            "joy": Freshness(JOY_TIMEOUT_S),
+            "depth": Freshness(SENSOR_TIMEOUT_S),
+            "imu": Freshness(SENSOR_TIMEOUT_S),
+            "fish": Freshness(FISH_COMMAND_TIMEOUT_S),
+        }
+        self._manual_rearm = True
+        self._input_fault = None
+        self._stopped = False
 
         # SIM-TO-REAL SCALING
         # Sim constants are canonical; real mode multiplies them by the
@@ -153,8 +161,6 @@ class GamepadTeleop(Node):
         self._shutdown_hold_start = None
         self._shutdown_requested = False
 
-        # CAMERA/FISH PROCESS
-        self._camera_process = None
 
         # ARMING (real mode only)
         # teleop only ever asks for a toggle; real_interface owns the
@@ -181,20 +187,6 @@ class GamepadTeleop(Node):
             self.battery_callback,
             10,
         )
-
-        # REAL CAMERA WINDOW
-        # The viewer process runs for the whole session; Y only toggles
-        # window visibility over this topic, so there is no reconnect wait.
-        self._camera_visible = False
-
-        self.camera_show_pub = self.create_publisher(
-            Bool,
-            CAMERA_SHOW_TOPIC,
-            10,
-        )
-
-        # PLOTTER PROCESS
-        self._plot_process = None
 
         # PID
         self.depth_pid = PIDController(
@@ -264,15 +256,18 @@ class GamepadTeleop(Node):
             self.publish_command,
         )
 
-        self._kill_leftover_viewers()
-
-        if self.rov_mode != "sim":
-            self.start_real_camera_viewer()
-
-        #self._print_controls()
+        self.viewers = ViewerManager(self, self.package_name, self.rov_mode)
+        if self.rov_mode == "real":
+            self.viewers.start_camera()
 
     # SENSOR CALLBACKS
     def depth_callback(self, msg: Float64):
+        if not math.isfinite(msg.data):
+            self.inputs["depth"].invalidate()
+            return
+        if (self.depth_keeping or self.trajectory_mode) and not self.inputs["depth"].fresh():
+            self._cancel_for_input_loss("depth")
+        self.inputs["depth"].touch()
         self.current_depth = float(msg.data)
 
         if self.fish_follow_mode:
@@ -309,6 +304,13 @@ class GamepadTeleop(Node):
 
     def imu_callback(self, msg: Imu):
         q = msg.orientation
+        values = (q.x, q.y, q.z, q.w)
+        if not all(math.isfinite(v) for v in values) or sum(v*v for v in values) < 1e-12 or msg.orientation_covariance[0] == -1:
+            self.inputs["imu"].invalidate()
+            return
+        if self.trajectory_mode and not self.inputs["imu"].fresh():
+            self._cancel_for_input_loss("imu")
+        self.inputs["imu"].touch()
 
         self.current_yaw = quaternion_to_yaw(
             q.x,
@@ -347,6 +349,13 @@ class GamepadTeleop(Node):
         if not self.fish_follow_mode:
             return
 
+        if not all(math.isfinite(v) for v in (msg.linear.x, msg.linear.z, msg.angular.z)):
+            self.inputs["fish"].invalidate()
+            return
+        if not self.inputs["fish"].fresh():
+            self._cancel_for_input_loss("fish")
+            return
+        self.inputs["fish"].touch()
         self.fish_surge_cmd = clamp(float(msg.linear.x))
         self.fish_heave_cmd = clamp(float(msg.linear.z))
         self.fish_yaw_cmd = clamp(float(msg.angular.z))
@@ -356,24 +365,31 @@ class GamepadTeleop(Node):
         axes = msg.axes
         buttons = msg.buttons
 
-        self._handle_buttons(buttons)
-        self._handle_dpad(axes)
-
-        if self.fish_follow_mode:
+        max_axis = max(AXIS_LEFT_STICK_Y, AXIS_RIGHT_STICK_X,
+                       AXIS_LEFT_TRIGGER, AXIS_RIGHT_TRIGGER)
+        if len(axes) <= max_axis or not all(math.isfinite(v) for v in axes):
+            self.inputs["joy"].invalidate()
+            return
+        # Detect a gap even when this callback runs before the output timer.
+        if not self.inputs["joy"].fresh():
+            self._cancel_for_input_loss("joy")
+        self.inputs["joy"].touch()
+        if self._manual_rearm:
+            neutral = (abs(axes[AXIS_LEFT_STICK_Y]) <= DEADZONE
+                       and abs(axes[AXIS_RIGHT_STICK_X]) <= DEADZONE
+                       and trigger_to_command(axes[AXIS_LEFT_TRIGGER]) == 0
+                       and trigger_to_command(axes[AXIS_RIGHT_TRIGGER]) == 0
+                       and not any(buttons)
+                       and (len(axes) <= AXIS_DPAD_Y or abs(axes[AXIS_DPAD_Y]) < DPAD_PRESS_LEVEL))
+            if neutral:
+                self._manual_rearm = False
+                self._input_fault = None
+                self.get_logger().info("Controls neutral; manual control ready.")
             return
 
-        max_axis = max(
-            AXIS_LEFT_STICK_Y,
-            AXIS_RIGHT_STICK_X,
-            AXIS_LEFT_TRIGGER,
-            AXIS_RIGHT_TRIGGER,
-        )
-
-        if len(axes) <= max_axis:
-            self.get_logger().warn(
-                f"Only {len(axes)} joystick axes detected. "
-                "Check rov_config.py."
-            )
+        self._handle_buttons(buttons)
+        self._handle_dpad(axes)
+        if self.fish_follow_mode or self._shutdown_requested:
             return
 
         if self.trajectory_mode:
@@ -524,141 +540,22 @@ class GamepadTeleop(Node):
         """
         Shut the stack down from the gamepad, exactly as Ctrl+C does.
 
-        Thrusters are zeroed first, then SIGINT is raised on this process
-        so rclpy.spin() unwinds through the normal shutdown path. The
-        launcher's watchdog sees teleop exit and stops everything else.
+        The lifecycle loop exits after this callback and publishes neutral
+        before closing viewers. The supervisor then stops the remaining nodes.
         """
         self.get_logger().warn("D-pad down held — shutting down.")
 
-        self.stop()
+        self._shutdown_requested = True
 
-        os.kill(os.getpid(), signal.SIGINT)
-
-    # PLOTTER
     def toggle_plotter(self):
-        """
-        Start/stop imu_depth_plotter.py. It subscribes to the common
-        /qut_rov/depth and /qut_rov/imu topics, so it is valid in both
-        sim and real mode.
-        """
-        running = (
-            self._plot_process is not None
-            and self._plot_process.poll() is None
-        )
-
-        if not running:
-            self.get_logger().info("Opening depth/IMU plotter...")
-
-            try:
-                self._plot_process = subprocess.Popen(
-                    [
-                        "ros2",
-                        "run",
-                        self.package_name,
-                        PLOTTER_EXECUTABLE,
-                    ],
-                    start_new_session=True,
-                )
-
-            except Exception as error:
-                self._plot_process = None
-                self.get_logger().error(
-                    f"Failed to start plotter: {error}"
-                )
-
-        else:
-            self.close_plotter()
-
-    def close_plotter(self):
-        if self._plot_process is None:
-            return
-
-        if self._plot_process.poll() is None:
-            try:
-                os.killpg(
-                    os.getpgid(self._plot_process.pid),
-                    signal.SIGTERM,
-                )
-                self._plot_process.wait(timeout=2.0)
-
-            except subprocess.TimeoutExpired:
-                os.killpg(
-                    os.getpgid(self._plot_process.pid),
-                    signal.SIGKILL,
-                )
-                self._plot_process.wait()
-
-            except ProcessLookupError:
-                pass
-
-        self._plot_process = None
-        self.get_logger().info("Plotter closed")
+        self.viewers.toggle_plotter()
 
     # BATTERY
     def battery_callback(self, msg: BatteryState):
         self.battery = msg
 
-    @staticmethod
-    def _percent_from_voltage(voltage: float):
-        """
-        Estimate charge from resting pack voltage using a per-cell curve.
-
-        Returns None when the voltage is too low to be a healthy 4S LiPo —
-        a bench supply or a flat pack — rather than reporting a
-        misleading 0%.
-        """
-        if voltage < BATTERY_MIN_PLAUSIBLE_V:
-            return None
-
-        cell = voltage / BATTERY_CELLS
-
-        if cell <= BATTERY_CELL_CURVE[0][0]:
-            return 0.0
-
-        if cell >= BATTERY_CELL_CURVE[-1][0]:
-            return 100.0
-
-        for index in range(1, len(BATTERY_CELL_CURVE)):
-            low_v, low_pct = BATTERY_CELL_CURVE[index - 1]
-            high_v, high_pct = BATTERY_CELL_CURVE[index]
-
-            if cell <= high_v:
-                span = high_v - low_v
-                fraction = 0.0 if span == 0 else (cell - low_v) / span
-                return low_pct + fraction * (high_pct - low_pct)
-
-        return 100.0
-
     def report_battery(self):
-        """Print the pack state. B button."""
-        if self.rov_mode == "sim":
-            self.get_logger().info("Battery reporting is real-mode only.")
-            return
-
-        if self.battery is None:
-            self.get_logger().warn(
-                "No battery data yet — is MAVROS connected?"
-            )
-            return
-
-        voltage = float(self.battery.voltage)
-        current = float(self.battery.current)
-        cell = voltage / BATTERY_CELLS
-
-        percent = self._percent_from_voltage(voltage)
-
-        if percent is None:
-            level = "n/a (not a 4S pack?)"
-        else:
-            level = f"{percent:.0f}%"
-
-        self.get_logger().info(
-            f"Battery: {voltage:.2f} V  ({cell:.2f} V/cell)  "
-            f"{level}   draw {abs(current):.1f} A"
-        )
-
-        if percent is not None and percent <= 20.0:
-            self.get_logger().warn("Battery low — surface soon.")
+        report_battery(self, self.battery, self.rov_mode)
 
     # ARMING
     def toggle_arming(self):
@@ -721,32 +618,6 @@ class GamepadTeleop(Node):
         self.k_yaw_ki = self._scaled(YAW_KI, REAL_SCALE_YAW_KI)
         self.k_yaw_kd = self._scaled(YAW_KD, REAL_SCALE_YAW_KD)
 
-    def _scaling_summary(self):
-        """Scalers that differ from 1.0, for the startup banner."""
-        if self.rov_mode == "sim":
-            return []
-
-        applied = [
-            ("manual surge", REAL_SCALE_MANUAL_SURGE),
-            ("manual yaw",   REAL_SCALE_MANUAL_YAW),
-            ("manual heave", REAL_SCALE_MANUAL_HEAVE),
-            ("traj forward", REAL_SCALE_TRAJ_FORWARD),
-            ("traj yaw",     REAL_SCALE_TRAJ_YAW),
-            ("depth Kp",     REAL_SCALE_DEPTH_KP),
-            ("depth Ki",     REAL_SCALE_DEPTH_KI),
-            ("depth Kd",     REAL_SCALE_DEPTH_KD),
-            ("depth FF",     REAL_SCALE_DEPTH_FF),
-            ("yaw Kp",       REAL_SCALE_YAW_KP),
-            ("yaw Ki",       REAL_SCALE_YAW_KI),
-            ("yaw Kd",       REAL_SCALE_YAW_KD),
-        ]
-
-        return [
-            f"{name} x{scale:g}"
-            for name, scale in applied
-            if scale != 1.0
-        ]
-
     # DEPTH KEEPING
     def toggle_depth_keeping(self):
         if self.fish_follow_mode:
@@ -764,7 +635,7 @@ class GamepadTeleop(Node):
         requested = not self.depth_keeping
 
         if requested:
-            if self.current_depth is None:
+            if self.current_depth is None or not self.inputs["depth"].fresh():
                 self.get_logger().warn(
                     "Depth keeping NOT enabled: no depth data yet."
                 )
@@ -801,13 +672,13 @@ class GamepadTeleop(Node):
         requested = not self.trajectory_mode
 
         if requested:
-            if self.current_depth is None:
+            if self.current_depth is None or not self.inputs["depth"].fresh():
                 self.get_logger().warn(
                     "Trajectory NOT enabled: no depth data yet."
                 )
                 return
 
-            if self.current_yaw is None:
+            if self.current_yaw is None or not self.inputs["imu"].fresh():
                 self.get_logger().warn(
                     "Trajectory NOT enabled: no IMU data yet."
                 )
@@ -854,133 +725,10 @@ class GamepadTeleop(Node):
                 "Trajectory DISABLED"
             )
 
-    # CAMERA / DETECTOR
-    def _kill_leftover_viewers(self):
-        """
-        Kill viewers left over from a previous run. teleop can be
-        SIGKILLed by the launcher, which skips the shutdown handler and
-        leaves the camera viewer and plotter running — they then stack
-        up across sessions, each holding its own RTSP connection.
-        """
-        for executable in (REAL_CAMERA_EXECUTABLE, PLOTTER_EXECUTABLE):
-            try:
-                subprocess.run(
-                    ["pkill", "-f", executable],
-                    check=False,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-            except Exception as error:
-                self.get_logger().warn(
-                    f"Could not kill leftover {executable}: {error}"
-                )
-
-    def start_real_camera_viewer(self):
-        """
-        Launch the RTSP viewer once, hidden. It holds the stream open for
-        the whole session so the Y button is instant instead of paying
-        connect + first-keyframe cost every time.
-        """
-        self.get_logger().info("Starting camera viewer (hidden)...")
-
-        try:
-            self._camera_process = subprocess.Popen(
-                [
-                    "ros2",
-                    "run",
-                    self.package_name,
-                    REAL_CAMERA_EXECUTABLE,
-                ],
-                start_new_session=True,
-            )
-
-        except Exception as error:
-            self._camera_process = None
-            self.get_logger().error(
-                f"Failed to start camera viewer: {error}"
-            )
-
     def toggle_camera(self):
-        """
-        SIM  — launches/kills the fish detector + camera viewer.
-        REAL — shows/hides the already-running RTSP viewer window.
-        """
-        if self.rov_mode != "sim":
-            # Viewer gone (crashed, or killed externally)? Bring it back.
-            if (
-                self._camera_process is None
-                or self._camera_process.poll() is not None
-            ):
-                self.start_real_camera_viewer()
-
-            self._camera_visible = not self._camera_visible
-
-            msg = Bool()
-            msg.data = self._camera_visible
-            self.camera_show_pub.publish(msg)
-
-            self.get_logger().info(
-                "Camera shown" if self._camera_visible else "Camera hidden"
-            )
-            return
-
-        running = (
-            self._camera_process is not None
-            and self._camera_process.poll() is None
-        )
-
-        if running:
-            self.close_camera_viewer()
-            return
-
-        self.get_logger().info("Opening fish detector and camera viewer...")
-
-        try:
-            self._camera_process = subprocess.Popen(
-                [
-                    "ros2",
-                    "run",
-                    self.package_name,
-                    FISH_FOLLOW_EXECUTABLE,
-                ],
-                start_new_session=True,
-            )
-
-        except Exception as error:
-            self._camera_process = None
-            self.get_logger().error(
-                f"Failed to start fish detector: {error}"
-            )
-
-    def close_camera_viewer(self):
-        if self.fish_follow_mode:
+        if self.rov_mode == "sim" and self.viewers.running(self.viewers.camera):
             self._set_fish_follow(False)
-
-        if self._camera_process is None:
-            return
-
-        if self._camera_process.poll() is None:
-            try:
-                os.killpg(
-                    os.getpgid(self._camera_process.pid),
-                    signal.SIGTERM,
-                )
-                self._camera_process.wait(timeout=2.0)
-
-            except subprocess.TimeoutExpired:
-                os.killpg(
-                    os.getpgid(self._camera_process.pid),
-                    signal.SIGKILL,
-                )
-                self._camera_process.wait()
-
-            except ProcessLookupError:
-                pass
-
-        self._camera_process = None
-        self.get_logger().info(
-            "Fish detector/camera closed"
-        )
+        self.viewers.toggle_camera()
 
     # FISH FOLLOW
     def toggle_fish_follow(self):
@@ -991,8 +739,7 @@ class GamepadTeleop(Node):
             return
 
         detector_running = (
-            self._camera_process is not None
-            and self._camera_process.poll() is None
+            self.viewers.running(self.viewers.camera)
         )
 
         if not detector_running:
@@ -1008,6 +755,7 @@ class GamepadTeleop(Node):
 
     def _set_fish_follow(self, enabled: bool):
         if enabled:
+            self.inputs["fish"].touch()  # Allow one timeout interval for the first result.
             self.depth_keeping = False
             self.trajectory_mode = False
 
@@ -1026,7 +774,8 @@ class GamepadTeleop(Node):
 
         enable_msg = Bool()
         enable_msg.data = enabled
-        self.follow_enable_pub.publish(enable_msg)
+        if rclpy.ok():
+            self.follow_enable_pub.publish(enable_msg)
 
         if not enabled:
             self.fish_surge_cmd = 0.0
@@ -1037,9 +786,41 @@ class GamepadTeleop(Node):
             f"Fish following {'ENABLED' if enabled else 'DISABLED'}"
         )
 
+    def _cancel_for_input_loss(self, source):
+        if self._input_fault != source:
+            self.get_logger().warn(f"Missing/stale {source} input: neutral output; release controls to resume manually.")
+        self._input_fault = source
+        self._manual_rearm = True
+        if self.fish_follow_mode:
+            self._set_fish_follow(False)
+        self.depth_keeping = self.trajectory_mode = False
+        self.target_depth = self.target_yaw = None
+        self.prev_depth_time = self.prev_yaw_time = None
+        self.depth_pid.reset()
+        self.yaw_pid.reset()
+        self.surge_cmd = self.heave_cmd = self.yaw_cmd = 0.0
+        self.fish_surge_cmd = self.fish_heave_cmd = self.fish_yaw_cmd = 0.0
+        self._shutdown_hold_start = None
+        for name in ("station", "trajectory", "camera", "fish", "plot", "arm", "battery"):
+            setattr(self, f"_{name}_pressed_last", False)
+
     # OUTPUT
     def publish_command(self):
+        required = ["joy"]
+        if self.depth_keeping or self.trajectory_mode:
+            required.append("depth")
+        if self.trajectory_mode:
+            required.append("imu")
+        if self.fish_follow_mode:
+            required.append("fish")
+        for source in required:
+            if not self.inputs[source].fresh():
+                self._cancel_for_input_loss(source)
+                break
         msg = Twist()
+        if self._manual_rearm or self._stopped:
+            self.command_pub.publish(msg)
+            return
 
         if self.fish_follow_mode:
             msg.linear.x = float(self.fish_surge_cmd)
@@ -1054,44 +835,18 @@ class GamepadTeleop(Node):
         self.command_pub.publish(msg)
 
     def stop(self):
-        self._set_fish_follow(False)
+        if self._stopped:
+            return
+        self._stopped = True
+        self.timer.cancel()
+        if rclpy.ok():
+            self._set_fish_follow(False)
+            self.command_pub.publish(Twist())
+        self.viewers.close()
 
-        self.surge_cmd = 0.0
-        self.heave_cmd = 0.0
-        self.yaw_cmd = 0.0
-
-        self.publish_command()
 
 def main(args=None):
-    rclpy.init(args=args)
-    node = GamepadTeleop()
-
-    def shutdown(signum, frame):
-        node.stop()
-        node.close_camera_viewer()
-        node.close_plotter()
-        node.destroy_node()
-        if rclpy.ok():
-            rclpy.shutdown()
-        sys.exit(0)
-
-    signal.signal(signal.SIGTERM, shutdown)
-    signal.signal(signal.SIGHUP, shutdown)
-
-    try:
-        rclpy.spin(node)
-
-    except KeyboardInterrupt:
-        pass
-
-    finally:
-        node.stop()
-        node.close_camera_viewer()
-        node.close_plotter()
-        node.destroy_node()
-
-        if rclpy.ok():
-            rclpy.shutdown()
+    run_node(GamepadTeleop, args)
 
 
 if __name__ == "__main__":

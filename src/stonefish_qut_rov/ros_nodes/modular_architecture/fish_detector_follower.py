@@ -1,12 +1,8 @@
 #!/usr/bin/env python3
 
-import os
-import select
-import sys
-import threading
 import time
 from pathlib import Path
-from threading import Lock, Thread
+from threading import RLock, Thread
 from typing import Optional, Tuple
 
 import cv2
@@ -24,19 +20,14 @@ from ultralytics.utils import LOGGER
 
 LOGGER.setLevel("ERROR")
 
-# Allows pid_controller.py to remain beside this script.
-sys.path.insert(0, os.path.dirname(__file__))
 from pid_controller import PIDController
+from node_lifecycle import run_node
+from rov_config import FISH_COMMAND_TIMEOUT_S
 
 
 BUOYANCY_OFFSET = 185.0
 REFERENCE_DIAGONAL_PX = 100.0
 REFERENCE_DISTANCE_M = 1.0
-
-TARGET_DISTANCE_M = 1.0
-DISTANCE_DEADBAND_M = 0.1
-
-FOLLOW_FORWARD_PWM = 300
 
 Detection = Tuple[float, float, float, float, float]
 
@@ -79,7 +70,8 @@ class FishDetectorFollower(Node):
         self.declare_parameter("enable_topic", "/qut_rov/fish_follow_enabled")
         self.declare_parameter("max_pwm", 600.0)
         self.declare_parameter("forward_pwm", 300.0)
-        self.declare_parameter("deadband_px", 5.0)
+        self.declare_parameter("yaw_deadband_px", 5.0)
+        self.declare_parameter("heave_deadband_px", 20.0)
 
         self.declare_parameter("yaw.kp", 1.9)
         self.declare_parameter("yaw.ki", 0.4)
@@ -111,7 +103,8 @@ class FishDetectorFollower(Node):
 
         self._max_pwm = float(self.get_parameter("max_pwm").value)
         self._forward_pwm = float(self.get_parameter("forward_pwm").value)
-        self._deadband = float(self.get_parameter("deadband_px").value)
+        self._yaw_deadband = float(self.get_parameter("yaw_deadband_px").value)
+        self._heave_deadband = float(self.get_parameter("heave_deadband_px").value)
 
         if not Path(self._model_path).is_file():
             raise FileNotFoundError(f"Model not found: {self._model_path}")
@@ -139,7 +132,10 @@ class FishDetectorFollower(Node):
         )
 
         self._bridge = CvBridge()
-        self._lock = Lock()
+        self._lock = RLock()
+        self._generation = 0
+        self._pending_time = None
+        self._pending_generation = 0
         self._enabled = False
         self._running = True
         self._frame_count = 0
@@ -190,7 +186,6 @@ class FishDetectorFollower(Node):
 
         self._inference_thread = Thread(target=self._inference_loop, daemon=True)
         self._inference_thread.start()
-        threading.Thread(target=self._keyboard_listener, daemon=True).start()
 
         self.get_logger().info(
             "\n========================================\n"
@@ -233,6 +228,8 @@ class FishDetectorFollower(Node):
                 # Keep only the newest frame so inference cannot build a backlog.
                 self._pending_frame = frame.copy()
                 self._pending_header = message.header
+                self._pending_time = time.monotonic()
+                self._pending_generation = self._generation
 
             annotated = (
                 None if self._last_annotated is None else self._last_annotated.copy()
@@ -284,6 +281,8 @@ class FishDetectorFollower(Node):
             with self._lock:
                 frame = self._pending_frame
                 header = self._pending_header
+                captured = self._pending_time
+                generation = self._pending_generation
                 if frame is not None:
                     self._pending_frame = None
                     self._pending_header = None
@@ -304,26 +303,26 @@ class FishDetectorFollower(Node):
 
                 result = results[0]
                 annotated = result.plot()
-                detection = self._select_target_detection(result)
-
                 with self._lock:
+                    # Never apply a result from an old enable session or an
+                    # inference that took longer than the command freshness limit.
+                    if not self._running or generation != self._generation:
+                        continue
+                    if captured is None or time.monotonic() - captured > FISH_COMMAND_TIMEOUT_S:
+                        continue
+                    detection = self._select_target_detection(result)
                     self._last_annotated = annotated
                     self._last_annotated_header = header
                     self._last_detection = detection
                     frame_height, frame_width = frame.shape[:2]
-
-                # Direct detector-to-controller path: no ROS subscription needed.
-                self._update_follower(
-                    detection=detection,
-                    frame_width=frame_width,
-                    frame_height=frame_height,
-                )
+                    self._update_follower(detection, frame_width, frame_height)
 
             except Exception as exc:
-                self.get_logger().error(f"Inference error: {exc}")
                 with self._lock:
-                    self._last_detection = None
-                self._stop_for_lost_target()
+                    if self._running and rclpy.ok():
+                        self.get_logger().error(f"Inference error: {exc}")
+                        self._last_detection = None
+                        self._stop_for_lost_target()
 
     @staticmethod
     def _box_to_detection(box) -> Detection:
@@ -469,8 +468,7 @@ class FishDetectorFollower(Node):
     ) -> None:
         now = self.get_clock().now().nanoseconds * 1e-9
 
-        # When disabled, teleop owns the thruster topic. Do not publish zeros here,
-        # because that would overwrite manual commands from the teleop node.
+        # Teleop owns mode arbitration and ignores follower commands when disabled.
         if not self._enabled:
             self._prev_control_time = now
             return
@@ -494,8 +492,8 @@ class FishDetectorFollower(Node):
         x_error = float(cx_fish - frame_width / 2.0)
         y_error = float(cy_fish - frame_height / 2.0)
 
-        x_error = apply_deadband(x_error, 5.0)  # Yaw deadband is smaller to allow more responsive turning
-        y_error = apply_deadband(y_error, 20.0)  # Pitch deadband is larger to avoid oscillation
+        x_error = apply_deadband(x_error, self._yaw_deadband)  # Yaw deadband is smaller to allow more responsive turning
+        y_error = apply_deadband(y_error, self._heave_deadband)  # Pitch deadband is larger to avoid oscillation
 
         bbox_diagonal = (w_fish**2 + h_fish**2) ** 0.5
         estimated_distance = (
@@ -547,13 +545,6 @@ class FishDetectorFollower(Node):
             )
         )
 
-        # Keep the existing graph display useful by plotting the equivalent
-        # Stonefish PWM values that the new mixer will approximately produce.
-        tl = heave * self._max_pwm
-        tr = heave * self._max_pwm
-        bl = (surge - yaw) * self._max_pwm
-        br = (surge + yaw) * self._max_pwm
-
         self._log_counter += 1
         if self._log_counter % 15 == 0:
             self.get_logger().info(
@@ -578,54 +569,28 @@ class FishDetectorFollower(Node):
     def _follow_enable_callback(self, message: Bool) -> None:
         """Receive follow-mode authority from the gamepad teleop node."""
 
-        requested = bool(message.data)
-        if requested == self._enabled:
-            return
-
-        self._enabled = requested
-        self._yaw_pid.reset()
-        self._pitch_pid.reset()
-        self._prev_control_time = None
-
-        # Each new Button[3] activation starts a fresh lock. Disabling releases
-        # the old target, so the next activation may deliberately choose another.
         with self._lock:
-            self._locked_detection = None
-            self._target_was_lost = False
-
-        if not self._enabled:
-            self._publish_command(0.0, 0.0, 0.0)
-
-        self.get_logger().info(
-            f"Following {'ENABLED' if self._enabled else 'DISABLED'} by teleop"
-        )
-
-    def _keyboard_listener(self) -> None:
-        while rclpy.ok() and self._running:
-            try:
-                readable, _, _ = select.select([sys.stdin], [], [], 0.1)
-            except (ValueError, OSError):
+            requested = bool(message.data)
+            if requested == self._enabled:
                 return
 
-            if not readable:
-                continue
+            self._generation += 1
+            self._enabled = requested
+            self._yaw_pid.reset()
+            self._pitch_pid.reset()
+            self._prev_control_time = None
 
-            key = sys.stdin.readline().strip().lower()
-            if key != "f":
-                continue
-
-            self._enabled = not self._enabled
+            # Each new Button[3] activation starts a fresh lock. Disabling releases
+            # the old target, so the next activation may deliberately choose another.
             with self._lock:
                 self._locked_detection = None
                 self._target_was_lost = False
 
             if not self._enabled:
-                self._yaw_pid.reset()
-                self._pitch_pid.reset()
                 self._publish_command(0.0, 0.0, 0.0)
 
             self.get_logger().info(
-                f"Following {'ENABLED' if self._enabled else 'DISABLED'}"
+                f"Following {'ENABLED' if self._enabled else 'DISABLED'} by teleop"
             )
 
     # ------------------------------------------------------------------
@@ -792,53 +757,22 @@ class FishDetectorFollower(Node):
                 )
 
     def shutdown(self) -> None:
-        # Send one best-effort zero vehicle command before disabling publishers.
-        self._enabled = False
         with self._lock:
+            if not self._running:
+                return
+            self._enabled = False
+            self._running = False
+            self._generation += 1
             self._locked_detection = None
-            self._target_was_lost = False
-
-        if rclpy.ok():
-            self._publish_pwm(
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                allow_during_shutdown=True,
-            )
-
-        # From this point onward, callbacks and worker threads are not allowed
-        # to publish.
-        self._running = False
-
-        with self._lock:
             self._pending_frame = None
             self._pending_header = None
-
+            self._publish_command(0.0, 0.0, 0.0, allow_during_shutdown=True)
+        self._inference_thread.join(timeout=2.0)
         cv2.destroyAllWindows()
 
 
 def main(args=None) -> None:
-    rclpy.init(args=args)
-    node = FishDetectorFollower()
-
-    try:
-        rclpy.spin(node)
-    except KeyboardInterrupt:
-        pass
-    except rclpy.executors.ExternalShutdownException:
-        # Expected when the subprocess is terminated by the teleop node.
-        pass
-    except Exception as exc:
-        # A callback may already be in flight when SIGTERM invalidates the
-        # context. Suppress only the expected shutdown-context error.
-        if "context is invalid" not in str(exc):
-            raise
-    finally:
-        node.shutdown()
-        node.destroy_node()
-        if rclpy.ok():
-            rclpy.shutdown()
+    run_node(FishDetectorFollower, args, cleanup="shutdown")
 
 
 if __name__ == "__main__":

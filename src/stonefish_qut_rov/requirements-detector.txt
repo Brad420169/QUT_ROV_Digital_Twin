@@ -1,0 +1,2 @@
+# Install in the ROS-compatible Python environment used to run the detector.
+ultralytics

@@ -52,6 +52,10 @@ REAL_CAMERA_DISPLAY_WIDTH = 1280
 # interface forces neutral output. Protects against teleop_controller
 # dying mid-run and leaving the last stick command latched.
 COMMAND_TIMEOUT_S = 0.5
+JOY_TIMEOUT_S = 0.5
+SENSOR_TIMEOUT_S = 0.5
+FISH_COMMAND_TIMEOUT_S = 0.5
+STARTUP_TIMEOUT_S = 45.0
 
 # GAMEPAD AXES
 AXIS_LEFT_STICK_Y  = 1
@@ -165,10 +169,6 @@ SIM_MAX_SETPOINT = 600.0
 # Update this if your subnet differs from the BlueRobotics default.
 REAL_ROV_IP         = "192.168.2.2"
 REAL_FCU_URL        = f"udp://:14550@{REAL_ROV_IP}:14555"
-
-# Startup delay to allow MAVROS to connect to the Pixhawk before
-# the interface node starts sending RC override messages.
-REAL_MAVROS_STARTUP_DELAY = 5.0
 
 # REAL CAMERA WINDOW TOGGLE
 # The viewer starts with teleop and holds the RTSP connection open;

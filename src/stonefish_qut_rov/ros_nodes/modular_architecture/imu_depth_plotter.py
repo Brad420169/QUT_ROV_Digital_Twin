@@ -18,11 +18,9 @@ can also be run standalone:
 
 import math
 import signal
-import sys
 import threading
 from collections import deque
 
-import matplotlib
 import matplotlib.pyplot as plt
 import rclpy
 from matplotlib.animation import FuncAnimation
@@ -31,7 +29,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import Imu
 from std_msgs.msg import Float64
 
-from control_utils import quaternion_to_yaw
+from control_utils import quaternion_to_rpy
 from rov_config import (
     DEPTH_TOPIC,
     IMU_TOPIC,
@@ -43,19 +41,6 @@ SENSOR_QOS = QoSProfile(
     depth=10,
     reliability=ReliabilityPolicy.BEST_EFFORT,
 )
-
-
-def quaternion_to_roll_pitch(x: float, y: float, z: float, w: float):
-    """Roll and pitch in radians (yaw comes from control_utils)."""
-    sinr_cosp = 2.0 * (w * x + y * z)
-    cosr_cosp = 1.0 - 2.0 * (x * x + y * y)
-    roll = math.atan2(sinr_cosp, cosr_cosp)
-
-    sinp = 2.0 * (w * y - z * x)
-    sinp = max(-1.0, min(1.0, sinp))
-    pitch = math.asin(sinp)
-
-    return roll, pitch
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -151,8 +136,7 @@ class PlotterNode(Node):
 
     def imu_callback(self, msg: Imu):
         q = msg.orientation
-        roll, pitch = quaternion_to_roll_pitch(q.x, q.y, q.z, q.w)
-        yaw = quaternion_to_yaw(q.x, q.y, q.z, q.w)
+        roll, pitch, yaw = quaternion_to_rpy(q.x, q.y, q.z, q.w)
 
         r = math.degrees(roll)
         p = math.degrees(pitch)
@@ -293,7 +277,7 @@ def main(args=None):
 
     fig.tight_layout()
 
-    animation = FuncAnimation(
+    animation = FuncAnimation(  # noqa: F841 - keep animation alive until plt.show returns
         fig,
         update,
         interval=PLOT_REFRESH_MS,
@@ -302,9 +286,7 @@ def main(args=None):
 
     def shutdown(signum, frame):
         plt.close("all")
-        if rclpy.ok():
-            rclpy.shutdown()
-        sys.exit(0)
+
 
     signal.signal(signal.SIGTERM, shutdown)
     signal.signal(signal.SIGHUP, shutdown)
@@ -316,9 +298,10 @@ def main(args=None):
         pass
 
     finally:
-        node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
+        executor_thread.join(timeout=2.0)
+        node.destroy_node()
 
 
 if __name__ == "__main__":

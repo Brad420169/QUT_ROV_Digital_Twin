@@ -39,9 +39,7 @@ Prerequisites:
     ros2 launch mavros apm.launch fcu_url:=udp://:14550@<ROV_IP>:14555
 """
 
-import signal
-import sys
-import time
+import math
 
 import rclpy
 from geometry_msgs.msg import Twist
@@ -76,6 +74,8 @@ from rov_config import (
     REAL_SURFACE_PRESSURE_PA,
     FRESH_WATER_DENSITY,
 )
+from command_watchdog import Freshness
+from node_lifecycle import run_node
 from control_utils import clamp
 from thruster_mixer import VehicleCommand
 
@@ -108,7 +108,8 @@ class RealInterface(Node):
         self.command = VehicleCommand()
 
         # Watchdog state
-        self._last_command_time = None
+        self.command_freshness = Freshness(COMMAND_TIMEOUT_S)
+        self._stopped = False
         self._command_stale = True   # start stale: no command yet -> neutral
 
         # Publishers
@@ -206,11 +207,15 @@ class RealInterface(Node):
     # Command in (identical shape to sim_interface) + watchdog stamp
     # ------------------------------------------------------------------
     def command_callback(self, msg: Twist):
+        if not all(math.isfinite(v) for v in (msg.linear.x, msg.linear.z, msg.angular.z)):
+            self.command.zero()
+            self.command_freshness.invalidate()
+            return
         self.command.surge = float(msg.linear.x)
         self.command.heave = float(msg.linear.z)
         self.command.yaw   = float(msg.angular.z)
 
-        self._last_command_time = self.get_clock().now()
+        self.command_freshness.touch()
 
         if self._command_stale:
             self._command_stale = False
@@ -279,6 +284,8 @@ class RealInterface(Node):
     # Sensor bridges -> common topics
     # ------------------------------------------------------------------
     def pressure_callback(self, msg: FluidPressure):
+        if not math.isfinite(msg.fluid_pressure):
+            return
         gauge_pressure = float(msg.fluid_pressure) - REAL_SURFACE_PRESSURE_PA
         depth = gauge_pressure / (FRESH_WATER_DENSITY * GRAVITY)
 
@@ -330,14 +337,7 @@ class RealInterface(Node):
     # Thruster publish
     # ------------------------------------------------------------------
     def _command_is_stale(self) -> bool:
-        if self._last_command_time is None:
-            return True
-
-        age = (
-            self.get_clock().now() - self._last_command_time
-        ).nanoseconds * 1e-9
-
-        return age > COMMAND_TIMEOUT_S
+        return not self.command_freshness.fresh()
 
     @staticmethod
     def _neutral_channels() -> list[int]:
@@ -389,7 +389,14 @@ class RealInterface(Node):
 
     # Stop — neutral on all channels (called on shutdown)
     def stop(self):
+        if self._stopped:
+            return
+        self._stopped = True
+        self.timer.cancel()
+        self._mode_timer.cancel()
         self.command.zero()
+        if not rclpy.ok():
+            return
 
         msg = OverrideRCIn()
         msg.channels = self._neutral_channels()
@@ -420,8 +427,15 @@ class RealInterface(Node):
         req = CommandBool.Request()
         req.value = False
 
-        client.call_async(req)
-        self.get_logger().info("Disarm requested.")
+        future = client.call_async(req)
+        try:
+            rclpy.spin_until_future_complete(self, future, timeout_sec=2.0)
+            if future.done() and future.result() and future.result().success:
+                self.get_logger().info("Disarm acknowledged.")
+            else:
+                self.get_logger().warn("Disarm not confirmed; check vehicle state in QGC.")
+        finally:
+            self.destroy_client(client)
 
     # ------------------------------------------------------------------
     # Mode / arming
@@ -462,31 +476,7 @@ class RealInterface(Node):
 
 # Entry point
 def main(args=None):
-    rclpy.init(args=args)
-    node = RealInterface()
-
-    def shutdown(signum, frame):
-        node.stop()
-        node.destroy_node()
-        if rclpy.ok():
-            rclpy.shutdown()
-        sys.exit(0)
-
-    signal.signal(signal.SIGTERM, shutdown)  # kill / pkill
-    signal.signal(signal.SIGHUP, shutdown)   # terminal closed
-
-    try:
-        rclpy.spin(node)
-
-    except KeyboardInterrupt:
-        pass
-
-    finally:
-        node.stop()
-        node.destroy_node()
-
-        if rclpy.ok():
-            rclpy.shutdown()
+    run_node(RealInterface, args)
 
 
 if __name__ == "__main__":

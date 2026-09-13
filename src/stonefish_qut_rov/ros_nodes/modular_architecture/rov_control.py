@@ -1,152 +1,23 @@
 #!/usr/bin/env python3
-"""
-Single entry point for the QUT ROV control stack.
-
-Usage:
-    ros2 run stonefish_qut_rov rov_control.py
-
-Then select:
-    [s] Simulation
-    [r] Real ROV
-
-SIM mode automatically starts:
-    1. ros2 launch stonefish_qut_rov launch_rov.py
-    2. joy_node
-    3. sim_interface.py
-    4. teleop_controller.py  (rov_mode:=sim)
-
-REAL mode automatically starts:
-    1. MAVROS  (apm.launch, FCU URL from rov_config.REAL_FCU_URL)
-    2. joy_node
-    3. real_interface.py
-    4. teleop_controller.py  (rov_mode:=real)
-"""
-
+"""Launch and supervise the sim/real stack; wait for telemetry before teleop."""
 import argparse
-import os
-import signal
-import subprocess
+import math
 import sys
 import time
 
-from rov_config import (
-    REAL_FCU_URL,
-    REAL_INTERFACE_EXECUTABLE,
-    REAL_MAVROS_STARTUP_DELAY,
-)
+from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
+from sensor_msgs.msg import Imu, Joy
+from std_msgs.msg import Float64
 
+from node_lifecycle import run_node
+from process_utils import start_process, stop_process
+from rov_config import (DEPTH_TOPIC, IMU_TOPIC, JOY_TOPIC, REAL_FCU_URL,
+                        REAL_INTERFACE_EXECUTABLE, STARTUP_TIMEOUT_S,
+                        JOY_TIMEOUT_S, SENSOR_TIMEOUT_S)
 
-PACKAGE         = "stonefish_qut_rov"
-
-# MAVROS prints a long plugin banner on startup. Send it to a file so the
-# launcher terminal stays readable; tail the file when debugging.
+PACKAGE = "stonefish_qut_rov"
 MAVROS_LOG_FILE = "/tmp/mavros.log"
-SIM_LAUNCH_FILE = "launch_rov.py"
-
-# Startup delays let each part of the ROS stack initialise before
-# the next process starts.
-STONEFISH_STARTUP_DELAY = 5.0
-JOY_STARTUP_DELAY       = 1.0
-INTERFACE_STARTUP_DELAY = 0.5
-
-
-# ---------------------------------------------------------------------------
-# Process helpers — unchanged from original
-# ---------------------------------------------------------------------------
-
-def start_process(
-    command: list[str],
-    log_file: str | None = None,
-) -> subprocess.Popen:
-    """
-    Start a process in its own process group.
-
-    Using a separate process group is important for ros2 launch because
-    launch_rov.py starts Stonefish and other child processes. It lets this
-    launcher shut down the entire group cleanly with Ctrl+C.
-
-    If log_file is given, stdout and stderr go there instead of this
-    terminal — used for MAVROS, whose plugin banner otherwise buries
-    everything else during startup. Tail it when you need the detail:
-        tail -f /tmp/mavros.log
-    """
-    print("$", " ".join(command), flush=True)
-
-    if log_file is not None:
-        handle = open(log_file, "w")
-
-        return subprocess.Popen(
-            command,
-            stdout=handle,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-        )
-
-    return subprocess.Popen(
-        command,
-        start_new_session=True,
-    )
-
-
-def stop_process(process: subprocess.Popen | None, name: str = "process"):
-    """Stop a process and its child process group."""
-    if process is None or process.poll() is not None:
-        return
-
-    print(f"Stopping {name}...", flush=True)
-
-    try:
-        os.killpg(
-            os.getpgid(process.pid),
-            signal.SIGINT,
-        )
-
-        process.wait(timeout=5.0)
-
-    except subprocess.TimeoutExpired:
-        try:
-            os.killpg(
-                os.getpgid(process.pid),
-                signal.SIGTERM,
-            )
-
-            process.wait(timeout=3.0)
-
-        except subprocess.TimeoutExpired:
-            try:
-                os.killpg(
-                    os.getpgid(process.pid),
-                    signal.SIGKILL,
-                )
-            except ProcessLookupError:
-                pass
-
-            process.wait()
-
-    except ProcessLookupError:
-        pass
-
-
-# ---------------------------------------------------------------------------
-# Mode selection
-# ---------------------------------------------------------------------------
-
-def choose_mode() -> str:
-    print()
-    print("================================")
-    print("         QUT ROV CONTROL")
-    print("================================")
-    print("[s] Simulation")
-    print("[r] Real ROV")
-    print()
-
-    while True:
-        choice = input("Select mode: ").strip().lower()
-
-        if choice in ("s", "r"):
-            return choice
-
-        print("Please enter 's' or 'r'.")
 
 
 def print_controls(rov_mode: str):
@@ -174,342 +45,110 @@ def print_controls(rov_mode: str):
     print("╚══════════════════════════════════════════════╝")
     print()
 
-# ---------------------------------------------------------------------------
-# Simulation mode — unchanged from original
-# ---------------------------------------------------------------------------
+class StackSupervisor(Node):
+    def __init__(self, mode):
+        super().__init__("rov_stack_supervisor")
+        self.mode = mode
+        self.processes = []
+        self.teleop = None
+        self.exit_code = 0
+        self._shutdown_requested = False
+        self.received = {}
+        self.started = time.monotonic()
+        self.subscriptions_ready = [
+            self.create_subscription(Float64, DEPTH_TOPIC, self.depth_ready, qos_profile_sensor_data),
+            self.create_subscription(Imu, IMU_TOPIC, self.imu_ready, qos_profile_sensor_data),
+            self.create_subscription(Joy, JOY_TOPIC, self.joy_ready, qos_profile_sensor_data),
+        ]
+        try:
+            if mode == "sim":
+                self.start("Stonefish", ["ros2", "launch", PACKAGE, "launch_rov.py"])
+            else:
+                self.start("MAVROS", ["ros2", "launch", "mavros", "apm.launch",
+                                      f"fcu_url:={REAL_FCU_URL}"], MAVROS_LOG_FILE)
+            # A held stick must still provide fresh messages to the watchdog.
+            self.start("joy_node", ["ros2", "run", "joy", "joy_node", "--ros-args",
+                                    "-p", "autorepeat_rate:=20.0"])
+            interface = "sim_interface.py" if mode == "sim" else REAL_INTERFACE_EXECUTABLE
+            self.start("interface", ["ros2", "run", PACKAGE, interface])
+            self.timer = self.create_timer(0.1, self.monitor)
+            self.get_logger().info("Waiting for joystick, depth and IMU data before starting teleop...")
+        except BaseException:
+            self.stop()
+            self.destroy_node()
+            raise
 
-def run_simulation() -> int:
-    print()
-    print("================================")
-    print("        SIMULATION MODE")
-    print("================================")
-    print("Launching Stonefish and ROS control nodes...")
-    print()
+    def start(self, name, command, log_file=None):
+        process = start_process(command, log_file)
+        self.processes.append((name, process))
+        return process
 
-    processes: list[tuple[str, subprocess.Popen]] = []
+    def depth_ready(self, msg):
+        if math.isfinite(msg.data):
+            self.received["depth"] = time.monotonic()
 
-    try:
-        # ================================================================
-        # 1. STONEFISH
-        # ================================================================
+    def imu_ready(self, msg):
+        q = msg.orientation
+        if (all(math.isfinite(v) for v in (q.x, q.y, q.z, q.w))
+                and sum(v*v for v in (q.x, q.y, q.z, q.w)) > 1e-12
+                and msg.orientation_covariance[0] != -1):
+            self.received["imu"] = time.monotonic()
 
-        stonefish = start_process([
-            "ros2",
-            "launch",
-            PACKAGE,
-            SIM_LAUNCH_FILE,
-        ])
-        processes.append(("Stonefish simulation", stonefish))
+    def joy_ready(self, msg):
+        if msg.axes and all(math.isfinite(v) for v in msg.axes):
+            self.received["joy"] = time.monotonic()
 
-        print(
-            f"Waiting {STONEFISH_STARTUP_DELAY:.0f} s for Stonefish to start...",
-            flush=True,
-        )
-        time.sleep(STONEFISH_STARTUP_DELAY)
+    def monitor(self):
+        for name, process in self.processes:
+            code = process.poll()
+            if code is not None:
+                self.exit_code = code if name == "teleop" else (code or 1)
+                self.get_logger().info(f"{name} exited ({code}); shutting down stack.")
+                self._shutdown_requested = True
+                return
+        if self.teleop is not None:
+            return
+        now = time.monotonic()
+        missing = [name for name, timeout in (("joy", JOY_TIMEOUT_S), ("depth", SENSOR_TIMEOUT_S),
+                                              ("imu", SENSOR_TIMEOUT_S))
+                   if now - self.received.get(name, -math.inf) > timeout]
+        if not missing:
+            self.teleop = self.start("teleop", ["ros2", "run", PACKAGE, "teleop_controller.py",
+                "--ros-args", "-p", f"rov_mode:={self.mode}", "-p", f"package_name:={PACKAGE}"])
+            print_controls(self.mode)
+            self.get_logger().info("Stack started. Release controls to neutral to enable manual control.")
+        elif now - self.started > STARTUP_TIMEOUT_S:
+            self.get_logger().error(f"Startup timed out waiting for: {', '.join(missing)}")
+            self.exit_code = 1
+            self._shutdown_requested = True
 
-        if stonefish.poll() is not None:
-            print(
-                "ERROR: Stonefish launch exited before control nodes started.",
-                file=sys.stderr,
-            )
-            return stonefish.returncode or 1
-
-        # ================================================================
-        # 2. GAMEPAD DRIVER
-        # ================================================================
-
-        joy = start_process([
-            "ros2",
-            "run",
-            "joy",
-            "joy_node",
-        ])
-        processes.append(("joy_node", joy))
-
-        time.sleep(JOY_STARTUP_DELAY)
-
-        # ================================================================
-        # 3. SIM INTERFACE
-        #
-        # /qut_rov/cmd_vel
-        #       ->
-        # surge/heave/yaw mixer
-        #       ->
-        # /qut_rov/setpoint/thrusters
-        # ================================================================
-
-        sim_interface = start_process([
-            "ros2",
-            "run",
-            PACKAGE,
-            "sim_interface.py",
-        ])
-
-        processes.append(("sim_interface", sim_interface))
-
-        time.sleep(1.0)
-
-        print()
-        print("Waiting for Stonefish to finish initialising...")
-        time.sleep(5.0)
-
-
-        # ================================================================
-        # 4. HIGH-LEVEL TELEOP / AUTONOMY CONTROLLER
-        # ================================================================
-
-        teleop = start_process([
-            "ros2",
-            "run",
-            PACKAGE,
-            "teleop_controller.py",
-            "--ros-args",
-            "-p",
-            "rov_mode:=sim",
-            "-p",
-            f"package_name:={PACKAGE}",
-        ])
-        processes.append(("teleop_controller", teleop))
-
-        print()
-        print("================================")
-        print("         SIMULATION READY")
-        print("================================")
-        print("Stonefish:       RUNNING")
-        print("Gamepad:         RUNNING")
-        print("Sim interface:   RUNNING")
-        print("Teleop control:  RUNNING")
-
-        print_controls("sim")
-
-        print("Press Ctrl+C here to stop everything.")
-        print()
-
-        # ================================================================
-        # 5. WATCHDOG
-        #
-        # Keep rov_control.py alive while both Stonefish and teleop are
-        # running. If either one closes, leave this loop so the finally
-        # block shuts down the rest of the stack automatically.
-        # ================================================================
-
-        while True:
-            if stonefish.poll() is not None:
-                print()
-                print("Stonefish has closed.")
-                print("Stopping the remaining simulation nodes...")
-                return stonefish.returncode or 0
-
-            if teleop.poll() is not None:
-                return_code = teleop.returncode or 0
-
-                if return_code != 0:
-                    print(
-                        f"teleop_controller exited with code {return_code}",
-                        file=sys.stderr,
-                    )
-
-                print()
-                print("Teleop controller has closed.")
-                print("Stopping the remaining simulation nodes...")
-                return return_code
-
-            time.sleep(0.2)
-
-    except KeyboardInterrupt:
-        print("\nCtrl+C received.")
-        return 0
-
-    finally:
-        print()
-        print("Shutting down simulation...")
-
-        for name, process in reversed(processes):
+    def stop(self):
+        if hasattr(self, "timer"):
+            self.timer.cancel()
+        for name, process in reversed(self.processes):
             stop_process(process, name)
-
-        print("Simulation stopped.")
-
-
-# ---------------------------------------------------------------------------
-# Real ROV mode
-# ---------------------------------------------------------------------------
-
-def run_real() -> int:
-    print()
-    print("================================")
-    print("          REAL ROV MODE")
-    print("================================")
-    print(f"FCU URL: {REAL_FCU_URL}")
-    print("Launching MAVROS and ROS control nodes...")
-    print()
-
-    processes: list[tuple[str, subprocess.Popen]] = []
-
-    try:
-        # ================================================================
-        # 1. MAVROS
-        #
-        # Bridges MAVLink (Pixhawk / ArduSub) to ROS2 topics.
-        # Publishes:
-        #   /mavros/imu/static_pressure  (Bar30 depth)
-        #   /mavros/imu/data             (IMU orientation)
-        # Subscribes:
-        #   /mavros/rc/override          (thruster RC commands)
-        # ================================================================
-
-        mavros = start_process(
-            [
-                "ros2",
-                "launch",
-                "mavros",
-                "apm.launch",
-                f"fcu_url:={REAL_FCU_URL}",
-            ],
-            log_file=MAVROS_LOG_FILE,
-        )
-        processes.append(("MAVROS", mavros))
-
-        print(f"MAVROS output -> {MAVROS_LOG_FILE}", flush=True)
-
-        print(
-            f"Waiting {REAL_MAVROS_STARTUP_DELAY:.0f} s for MAVROS to connect...",
-            flush=True,
-        )
-        time.sleep(REAL_MAVROS_STARTUP_DELAY)
-
-        if mavros.poll() is not None:
-            print(
-                "ERROR: MAVROS exited before control nodes started.\n"
-                "       Check the FCU URL and tether connection.",
-                file=sys.stderr,
-            )
-            return mavros.returncode or 1
-
-        # ================================================================
-        # 2. GAMEPAD DRIVER
-        # ================================================================
-
-        joy = start_process([
-            "ros2",
-            "run",
-            "joy",
-            "joy_node",
-        ])
-        processes.append(("joy_node", joy))
-
-        time.sleep(JOY_STARTUP_DELAY)
-
-        # ================================================================
-        # 3. REAL INTERFACE
-        #
-        # /qut_rov/cmd_vel
-        #       ->
-        # surge/heave/yaw mixer  +  normalised_to_rc()
-        #       ->
-        # /mavros/rc/override  (1100–1900 µs)
-        #
-        # /mavros/imu/static_pressure
-        #       ->
-        # gauge pressure / (rho * g)
-        #       ->
-        # /qut_rov/depth  (Float64, metres)
-        # ================================================================
-
-        real_interface = start_process([
-            "ros2",
-            "run",
-            PACKAGE,
-            REAL_INTERFACE_EXECUTABLE,
-        ])
-        processes.append(("real_interface", real_interface))
-
-        time.sleep(INTERFACE_STARTUP_DELAY)
-
-        # ================================================================
-        # 4. HIGH-LEVEL TELEOP / AUTONOMY CONTROLLER
-        #
-        # rov_mode:=real disables fish following and the sim camera launcher.
-        # All other modes (manual, depth keeping, trajectory) work as normal.
-        # ================================================================
-
-        teleop = start_process([
-            "ros2",
-            "run",
-            PACKAGE,
-            "teleop_controller.py",
-            "--ros-args",
-            "-p",
-            "rov_mode:=real",
-            "-p",
-            f"package_name:={PACKAGE}",
-        ])
-        processes.append(("teleop_controller", teleop))
-
-        print()
-        print("================================")
-        print("         REAL ROV READY")
-        print("================================")
-        print("MAVROS:          RUNNING")
-        print("Gamepad:         RUNNING")
-        print("Real interface:  RUNNING")
-        print("Teleop control:  RUNNING")
-
-        print_controls("real")
-
-        print("Press Ctrl+C here to stop everything.")
-        print()
-
-        return_code = teleop.wait()
-
-        if return_code != 0:
-            print(
-                f"teleop_controller exited with code {return_code}",
-                file=sys.stderr,
-            )
-
-        return return_code
-
-    except KeyboardInterrupt:
-        print("\nCtrl+C received.")
-        return 0
-
-    finally:
-        print()
-        print("Shutting down real ROV stack...")
-
-        # Shut down in reverse order:
-        # controller -> interface -> joystick -> MAVROS
-        for name, process in reversed(processes):
-            stop_process(process, name)
-
-        print("Real ROV stack stopped.")
+        self.processes.clear()
 
 
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
-
-def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="QUT ROV control launcher"
-    )
-    parser.add_argument(
-        "--mode",
-        choices=["sim", "real", "s", "r"],
-        help="Start directly in simulation or real ROV mode.",
-    )
-
+def main():
+    parser = argparse.ArgumentParser(description="QUT ROV control launcher")
+    parser.add_argument("--mode", choices=["sim", "real", "s", "r"])
     args = parser.parse_args()
+    mode = args.mode
+    while mode is None:
+        choice = input("Select mode [s] simulation / [r] real ROV: ").strip().lower()
+        if choice in ("s", "r", "sim", "real"):
+            mode = choice
+    mode = "sim" if mode in ("s", "sim") else "real"
+    holder = []
 
-    if args.mode is None:
-        mode = choose_mode()
-    else:
-        mode = "s" if args.mode in ("sim", "s") else "r"
+    def create():
+        node = StackSupervisor(mode)
+        holder.append(node)
+        return node
 
-    if mode == "s":
-        return run_simulation()
-
-    return run_real()
+    run_node(create, args=[])
+    return holder[0].exit_code if holder else 1
 
 
 if __name__ == "__main__":
