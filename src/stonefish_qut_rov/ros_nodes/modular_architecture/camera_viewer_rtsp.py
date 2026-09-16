@@ -152,8 +152,8 @@ class ViewerNode(Node):
 
         self.declare_parameter("start_visible", False)
         self.declare_parameter("gimbal_hold_enabled", True)
-        self.declare_parameter("gimbal_pitch_deg", 90.0)
-        self.declare_parameter("gimbal_yaw_deg", -90.0)
+        self.declare_parameter("gimbal_pitch_deg", -90.0)
+        self.declare_parameter("gimbal_yaw_deg", 90.0)
         self.declare_parameter("gimbal_host", REAL_CAMERA_IP)
         self.vision_allowed = False
         self.health_message = 'Waiting for camera health; all vision control disabled.'

@@ -8,8 +8,8 @@ real mode:
     /qut_rov/imu     (sensor_msgs/Imu)
 
 Displays a rolling window:
-    top    — depth vs time (y axis inverted, deeper is lower)
-    bottom — roll / pitch / yaw vs time, degrees
+    left  — depth vs time (y axis inverted, deeper is lower)
+    right — pitch, roll, yaw stacked vertically on independent axes
 
 Launched and killed by teleop_controller via the D-pad up toggle, but
 can also be run standalone:
@@ -26,6 +26,7 @@ import rclpy
 from matplotlib.animation import FuncAnimation
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
+from rclpy.signals import SignalHandlerOptions
 from sensor_msgs.msg import Imu
 from std_msgs.msg import Float64
 
@@ -60,15 +61,6 @@ ZERO_YAW = True
 # from tether drag is a real sim-to-real discrepancy worth seeing.
 # Zeroing hides it. Set False to keep roll/pitch absolute.
 ZERO_ROLL_PITCH = True
-
-# ─────────────────────────────────────────────────────────────────────
-# WHICH TRACES TO PLOT
-# Data for all three is always collected — these only control what is
-# drawn, so flipping one back on needs no other change.
-SHOW_ROLL  = False
-SHOW_PITCH = True
-SHOW_YAW   = False
-
 
 class PlotterNode(Node):
     def __init__(self):
@@ -147,7 +139,9 @@ class PlotterNode(Node):
                 self.datum = (r, p, y)
 
             if ZERO_ROLL_PITCH:
-                r -= self.datum[0]
+                # Roll, like yaw, crosses the atan2 boundary at +/-180.
+                # Subtract the datum using the shortest angular difference.
+                r = (r - self.datum[0] + 180.0) % 360.0 - 180.0
                 p -= self.datum[1]
 
             if ZERO_YAW:
@@ -173,69 +167,41 @@ class PlotterNode(Node):
             )
 
 
-def main(args=None):
-    rclpy.init(args=args)
-    node = PlotterNode()
-
-    executor_thread = threading.Thread(
-        target=rclpy.spin,
-        args=(node,),
-        daemon=True,
-    )
-    executor_thread.start()
-
-    fig, (ax_depth, ax_imu) = plt.subplots(1, 2, figsize=(13, 6.5))
+def create_plot(snapshot):
+    """Build the four panels and their update callback."""
+    fig = plt.figure(figsize=(13, 7.5), layout="constrained")
     fig.canvas.manager.set_window_title("SubbyROV — Depth & IMU")
-
-    # Force both panels square regardless of window resizing
-    ax_depth.set_box_aspect(1)
-    ax_imu.set_box_aspect(1)
+    grid = fig.add_gridspec(3, 2)
+    ax_depth = fig.add_subplot(grid[:, 0])
+    ax_pitch = fig.add_subplot(grid[0, 1], sharex=ax_depth)
+    ax_roll = fig.add_subplot(grid[1, 1], sharex=ax_depth)
+    ax_yaw = fig.add_subplot(grid[2, 1], sharex=ax_depth)
 
     depth_line, = ax_depth.plot([], [], color="tab:blue", label="depth")
+    ax_depth.set_title("Depth")
     ax_depth.set_ylabel("Depth (m)")
     ax_depth.set_xlabel("Time (s)")
     ax_depth.invert_yaxis()
     ax_depth.grid(True, alpha=0.3)
-    ax_depth.legend(loc="upper right")
+    pitch_line, = ax_pitch.plot([], [], color="tab:green")
+    roll_line, = ax_roll.plot([], [], color="tab:red")
+    yaw_line, = ax_yaw.plot([], [], color="tab:orange")
 
-    roll_line,  = ax_imu.plot([], [], color="tab:red",    label="roll")
-    pitch_line, = ax_imu.plot([], [], color="tab:green",  label="pitch")
-    yaw_line,   = ax_imu.plot([], [], color="tab:orange", label="yaw")
-
-    roll_line.set_visible(SHOW_ROLL)
-    pitch_line.set_visible(SHOW_PITCH)
-    yaw_line.set_visible(SHOW_YAW)
-
-    # Label only reflects the traces actually shown
-    _rp = "rel" if ZERO_ROLL_PITCH else "abs"
-    _y = "rel" if ZERO_YAW else "abs"
-    _bits = []
-    if SHOW_ROLL:
-        _bits.append(f"roll {_rp}")
-    if SHOW_PITCH:
-        _bits.append(f"pitch {_rp}")
-    if SHOW_YAW:
-        _bits.append(f"yaw {_y}")
-    ax_imu.set_ylabel(
-        "Angle (deg)  " + ", ".join(_bits) if _bits else "Angle (deg)"
-    )
-
-    ax_imu.set_xlabel("Time (s)")
-    ax_imu.grid(True, alpha=0.3)
-
-    # Legend carries only the visible traces
-    _handles = [
-        ln for ln, on in (
-            (roll_line, SHOW_ROLL),
-            (pitch_line, SHOW_PITCH),
-            (yaw_line, SHOW_YAW),
-        ) if on
-    ]
-    if _handles:
-        ax_imu.legend(handles=_handles, loc="upper right")
+    for axis, title, relative in (
+        (ax_pitch, "Pitch", ZERO_ROLL_PITCH),
+        (ax_roll, "Roll", ZERO_ROLL_PITCH),
+        (ax_yaw, "Yaw", ZERO_YAW),
+    ):
+        axis.set_title(title)
+        axis.set_ylabel("Relative (°)" if relative else "Angle (°)")
+        axis.grid(True, alpha=0.3)
+        axis.set_ylim(-5.0, 5.0)
+    ax_pitch.tick_params(labelbottom=False)
+    ax_roll.tick_params(labelbottom=False)
+    ax_yaw.set_xlabel("Time (s)")
 
     def update(_frame):
-        dt_, dv, it, rv, pv, yv = node.snapshot()
+        dt_, dv, it, rv, pv, yv = snapshot()
 
         depth_line.set_data(dt_, dv)
         roll_line.set_data(it, rv)
@@ -249,33 +215,38 @@ def main(args=None):
         left = max(0.0, latest - PLOT_WINDOW_SECONDS)
         right = max(left + 1.0, latest)
 
-        # Shared time window, but each panel carries its own axis
+        # All four panels share time; each measurement has its own scale.
         ax_depth.set_xlim(left, right)
-        ax_imu.set_xlim(left, right)
 
         if dv:
             lo, hi = min(dv), max(dv)
             pad = max(0.1, (hi - lo) * 0.2)
             ax_depth.set_ylim(hi + pad, lo - pad)   # inverted
 
-        # Autoscale on visible traces only — a hidden yaw swing must not
-        # squash the pitch trace.
-        allv = []
-        if SHOW_ROLL:
-            allv += rv
-        if SHOW_PITCH:
-            allv += pv
-        if SHOW_YAW:
-            allv += yv
-
-        if allv:
-            lo, hi = min(allv), max(allv)
-            pad = max(5.0, (hi - lo) * 0.15)
-            ax_imu.set_ylim(lo - pad, hi + pad)
+        for axis, values in ((ax_pitch, pv), (ax_roll, rv), (ax_yaw, yv)):
+            if values:
+                lo, hi = min(values), max(values)
+                pad = max(5.0, (hi - lo) * 0.15)
+                axis.set_ylim(lo - pad, hi + pad)
 
         return depth_line, roll_line, pitch_line, yaw_line
 
-    fig.tight_layout()
+    return fig, update
+
+
+def main(args=None):
+    rclpy.init(args=args, signal_handler_options=SignalHandlerOptions.NO)
+    node = PlotterNode()
+
+    def spin():
+        try:
+            rclpy.spin(node)
+        except rclpy.executors.ExternalShutdownException:
+            pass
+
+    executor_thread = threading.Thread(target=spin, daemon=True)
+    executor_thread.start()
+    fig, update = create_plot(node.snapshot)
 
     animation = FuncAnimation(  # noqa: F841 - keep animation alive until plt.show returns
         fig,
@@ -288,6 +259,8 @@ def main(args=None):
         plt.close("all")
 
 
+    # ViewerManager sends SIGINT on the next D-pad up press.
+    signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)
     signal.signal(signal.SIGHUP, shutdown)
 

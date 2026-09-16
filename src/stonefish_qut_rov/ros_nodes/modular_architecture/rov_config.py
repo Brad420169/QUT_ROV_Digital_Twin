@@ -33,6 +33,16 @@ REAL_PRESSURE_TOPIC    = "/mavros/imu/static_pressure"
 REAL_IMU_TOPIC         = "/mavros/imu/data"
 REAL_SET_MODE_SERVICE  = "/mavros/set_mode"
 REAL_ARMING_SERVICE    = "/mavros/cmd/arming"
+REAL_MESSAGE_INTERVAL_SERVICE = "/mavros/set_message_interval"
+
+# ArduSub's SRx_EXTRA1 / SRx_RAW_SENS stream-rate params get reset to
+# their low defaults (10 Hz / 2 Hz) by the companion computer on every
+# reconnect, so IMU/depth rate must be requested explicitly each run
+# (confirmed on the bench: SET_MESSAGE_INTERVAL is the only thing that
+# actually sticks — writing the SRx params directly did not).
+REAL_SENSOR_RATE_HZ = 30.0
+# MAVLink common.xml message IDs: ATTITUDE, RAW_IMU, SCALED_PRESSURE.
+REAL_FAST_STREAM_MESSAGE_IDS = (30, 27, 29)
 
 # REAL ROV CAMERA (Z-1Mini, RTSP)
 # Default pod address is 192.168.144.108. Either reconfigure the pod to

@@ -56,7 +56,7 @@ class FPVHold:
     Closing leaves the last target in the camera, rather than sending zero
     angles (which would command a different pose). This does not save flash.
     """
-    def __init__(self, host, pitch=90., yaw=-90., log=print):
+    def __init__(self, host, pitch=-90., yaw=-90., log=print):
         self.host, self.log = host, log
         self.target = make_packet(pitch, yaw)
         self.mode = make_packet(pitch, yaw, 0x1c)

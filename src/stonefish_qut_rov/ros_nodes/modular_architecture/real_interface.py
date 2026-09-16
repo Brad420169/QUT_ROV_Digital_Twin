@@ -44,7 +44,7 @@ import math
 import rclpy
 from geometry_msgs.msg import Twist
 from mavros_msgs.msg import OverrideRCIn, State
-from mavros_msgs.srv import CommandBool, SetMode
+from mavros_msgs.srv import CommandBool, MessageInterval, SetMode
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import BatteryState, FluidPressure, Imu
@@ -63,8 +63,11 @@ from rov_config import (
     GRAVITY,
     IMU_TOPIC,
     REAL_ARMING_SERVICE,
+    REAL_FAST_STREAM_MESSAGE_IDS,
     REAL_IMU_TOPIC,
+    REAL_MESSAGE_INTERVAL_SERVICE,
     REAL_PRESSURE_TOPIC,
+    REAL_SENSOR_RATE_HZ,
     REAL_RC_NEUTRAL_US,
     REAL_RC_OVERRIDE_TOPIC,
     REAL_RC_RANGE_US,
@@ -197,6 +200,11 @@ class RealInterface(Node):
 
         # Request MANUAL mode from ArduSub after a short delay (one-shot)
         self._mode_timer = self.create_timer(6.0, self._set_manual_mode)
+
+        # Request faster IMU/depth streaming once MAVROS is up (one-shot).
+        # ArduSub does not honour this from SRx_* params alone on a fresh
+        # connection, so it has to be asked for every run.
+        self._rate_timer = self.create_timer(3.0, self._set_sensor_rates)
 
         self.get_logger().info(
             "REAL interface ready: surge/heave/yaw -> "
@@ -440,6 +448,40 @@ class RealInterface(Node):
     # ------------------------------------------------------------------
     # Mode / arming
     # ------------------------------------------------------------------
+    def _set_sensor_rates(self):
+        self._rate_timer.cancel()
+
+        self._rate_client = self.create_client(MessageInterval, REAL_MESSAGE_INTERVAL_SERVICE)
+
+        if not self._rate_client.wait_for_service(timeout_sec=5.0):
+            self.get_logger().warn(
+                "MAVROS set_message_interval service not available — "
+                "IMU/depth staying at their ArduSub default rate."
+            )
+            return
+
+        # MAVROS's cmd plugin is not safe for concurrent SET_MESSAGE_INTERVAL
+        # calls (confirmed on the bench: firing them concurrently crashed
+        # mavros_node with "Promise already satisfied") — request one at a
+        # time, moving to the next only once each response lands.
+        self._rate_ids_remaining = list(REAL_FAST_STREAM_MESSAGE_IDS)
+        self._request_next_sensor_rate()
+
+    def _request_next_sensor_rate(self):
+        if not self._rate_ids_remaining:
+            return
+        message_id = self._rate_ids_remaining.pop(0)
+        req = MessageInterval.Request()
+        req.message_id = message_id
+        req.message_rate = REAL_SENSOR_RATE_HZ
+        self._rate_client.call_async(req).add_done_callback(self._rate_response_callback)
+
+    def _rate_response_callback(self, future):
+        result = future.result()
+        if not result or not result.success:
+            self.get_logger().warn("MAVROS declined a set_message_interval request.")
+        self._request_next_sensor_rate()
+
     def _set_manual_mode(self):
         self._mode_timer.cancel()
 
