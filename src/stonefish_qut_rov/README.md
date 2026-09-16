@@ -73,6 +73,28 @@ Python source directories.
 
 ## Regression tests
 
+### Physical ROV PWM monitor
+
+With the regular physical ROV stack running, open another terminal and run:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+python3 /home/brad/Desktop/EGH490/ros2_ws/src/stonefish_qut_rov/ros_nodes/modular_architecture/pwm_monitor.py
+```
+
+Use the same ROS_DOMAIN_ID as the control stack. The monitor displays the latest
+requested `channels[2]`, `[3]`, `[4]` alongside FCU-reported output PWM for motors
+1–4, in microseconds, twice per second. Samples are independently received, not
+paired acknowledgements. These outputs are not measured RPM or thrust. Missing
+data shows WAITING; samples older than two seconds show STALE. If output stays
+WAITING, check that MAVROS publishes `/mavros/rc/out` with its `rc_io` plugin enabled
+and that the FCU is streaming SERVO_OUTPUT_RAW. The monitor sends no commands and
+does not change telemetry rates. Ctrl+C closes only the monitor.
+
+After rebuilding the package, `ros2 run stonefish_qut_rov pwm_monitor.py` also works.
+For a different MAVROS namespace, append
+`--ros-args -p mavros_namespace:=/your_mavros_namespace`.
+
 ```bash
 source /opt/ros/jazzy/setup.bash
 python3 -m pytest src/stonefish_qut_rov/tests

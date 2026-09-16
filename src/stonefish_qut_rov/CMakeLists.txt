@@ -25,6 +25,7 @@ install(
     ros_nodes/modular_architecture/fish_detector_follower.py
     ros_nodes/modular_architecture/real_interface.py
     ros_nodes/modular_architecture/imu_depth_plotter.py
+    ros_nodes/modular_architecture/pwm_monitor.py
     ros_nodes/modular_architecture/camera_viewer_rtsp.py
   DESTINATION lib/${PROJECT_NAME}
 )

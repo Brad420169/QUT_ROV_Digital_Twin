@@ -2,6 +2,11 @@
 Central configuration for the QUT ROV control stack.
 """
 
+
+# Scale real speed
+
+REAL_SPEED_SCALE = 0.5
+
 # COMMON ROS TOPICS
 JOY_TOPIC       = "/joy"
 CMD_VEL_TOPIC   = "/qut_rov/cmd_vel"
@@ -99,15 +104,14 @@ DEPTH_KP = 200.0 / 600.0
 DEPTH_KI = 5.0   / 600.0
 DEPTH_KD = 80.0  / 600.0
 
-DEPTH_INTEGRAL_LIMIT = 400.0
+DEPTH_INTEGRAL_LIMIT = 400.0 / 600.0
 DEPTH_FEEDFORWARD    = -160.0 / 600.0
 
 # YAW / TRAJECTORY CONTROLLER
 YAW_KP             = 0.0
 YAW_KI             = 0.0
 YAW_KD             = 0.0
-YAW_INTEGRAL_LIMIT = 150.0
-
+YAW_INTEGRAL_LIMIT = 150.0 / 600.0
 TRAJECTORY_FORWARD = 0.5
 TRAJECTORY_MAX_YAW = 0.3
 
