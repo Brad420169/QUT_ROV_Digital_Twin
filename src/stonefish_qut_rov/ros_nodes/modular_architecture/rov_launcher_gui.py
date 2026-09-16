@@ -11,12 +11,15 @@ import os
 import shlex
 import shutil
 import subprocess
+from pathlib import Path
 import tkinter as tk
 from tkinter import messagebox
 
 
-WORKSPACE = os.path.expanduser("~/Desktop/EGH490/ros2_ws")
-ROS_SETUP = "/opt/ros/jazzy/setup.bash"
+WORKSPACE = os.environ.get("ROV_WORKSPACE") or next(
+    (str(parent) for parent in Path(__file__).resolve().parents
+     if (parent / "install/setup.bash").is_file()), "")
+ROS_SETUP = f"/opt/ros/{os.environ.get('ROS_DISTRO', 'jazzy')}/setup.bash"
 WORKSPACE_SETUP = os.path.join(WORKSPACE, "install", "setup.bash")
 
 PACKAGE = "stonefish_qut_rov"
@@ -29,8 +32,8 @@ def find_optional_venv():
     Try a few sensible locations. If none exists, continue without it.
     """
     candidates = [
-        os.path.expanduser("~/Desktop/EGH490/ros2_ws/venv-yellow-tang/bin/activate"),
-        os.path.expanduser("~/Desktop/EGH490/venv-yellow-tang/bin/activate"),
+        os.path.join(WORKSPACE, "venv-yellow-tang/bin/activate"),
+        str(Path(WORKSPACE).parent / "venv-yellow-tang/bin/activate"),
         os.path.expanduser("~/.venvs/venv-yellow-tang/bin/activate"),
         os.path.expanduser("~/venv-yellow-tang/bin/activate"),
     ]
@@ -103,7 +106,7 @@ def open_terminal(command: str):
     )
 
 
-def launch_mode(mode: str):
+def launch_mode(mode: str, root):
     if not os.path.isfile(ROS_SETUP):
         messagebox.showerror(
             "ROS 2 not found",
@@ -136,50 +139,55 @@ def launch_mode(mode: str):
     root.destroy()
 
 
-root = tk.Tk()
-root.title("QUT ROV Control")
-root.geometry("520x330")
-root.resizable(False, False)
+def main():
+    root = tk.Tk()
+    root.title("QUT ROV Control")
+    root.geometry("520x330")
+    root.resizable(False, False)
 
-title = tk.Label(
-    root,
-    text="QUT ROV Control",
-    font=("Arial", 24, "bold"),
-)
-title.pack(pady=(28, 5))
+    title = tk.Label(
+        root,
+        text="QUT ROV Control",
+        font=("Arial", 24, "bold"),
+    )
+    title.pack(pady=(28, 5))
 
-subtitle = tk.Label(
-    root,
-    text="Select the platform to control",
-    font=("Arial", 12),
-)
-subtitle.pack(pady=(0, 25))
+    subtitle = tk.Label(
+        root,
+        text="Select the platform to control",
+        font=("Arial", 12),
+    )
+    subtitle.pack(pady=(0, 25))
 
-sim_button = tk.Button(
-    root,
-    text="Stonefish Simulation",
-    font=("Arial", 16, "bold"),
-    width=27,
-    height=2,
-    command=lambda: launch_mode("sim"),
-)
-sim_button.pack(pady=8)
+    sim_button = tk.Button(
+        root,
+        text="Stonefish Simulation",
+        font=("Arial", 16, "bold"),
+        width=27,
+        height=2,
+        command=lambda: launch_mode("sim", root),
+    )
+    sim_button.pack(pady=8)
 
-real_button = tk.Button(
-    root,
-    text="Real ROV",
-    font=("Arial", 16, "bold"),
-    width=27,
-    height=2,
-    command=lambda: launch_mode("real"),
-)
-real_button.pack(pady=8)
+    real_button = tk.Button(
+        root,
+        text="Real ROV",
+        font=("Arial", 16, "bold"),
+        width=27,
+        height=2,
+        command=lambda: launch_mode("real", root),
+    )
+    real_button.pack(pady=8)
 
-footer = tk.Label(
-    root,
-    text="ROS 2 Jazzy • stonefish_qut_rov",
-    font=("Arial", 9),
-)
-footer.pack(side="bottom", pady=14)
+    footer = tk.Label(
+        root,
+        text="ROS 2 Jazzy • stonefish_qut_rov",
+        font=("Arial", 9),
+    )
+    footer.pack(side="bottom", pady=14)
 
-root.mainloop()
+    root.mainloop()
+
+
+if __name__ == "__main__":
+    main()
