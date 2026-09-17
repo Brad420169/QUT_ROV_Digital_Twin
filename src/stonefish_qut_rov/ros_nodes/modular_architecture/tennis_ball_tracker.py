@@ -11,13 +11,17 @@ COMMAND_TOPIC = '/qut_rov/tennis_ball_cmd'
 TARGET_TOPIC = '/qut_rov/tennis_ball_target_valid'
 
 
-def detect_ball(frame, hsv_low=(20, 90, 80), hsv_high=(45, 255, 255)):
+def detect_ball(frame, hsv_low=(15, 50, 50), hsv_high=(55, 255, 255), detection_width=960):
     """Return (cx, cy, radius) in original pixels, or None.
 
     Round yellow objects can be false positives; inspect the overlay before use.
+    detection_width caps processing width without upscaling smaller inputs.
+    Minimum area/radius thresholds remain in detection-image pixels.
     """
     h, w = frame.shape[:2]
-    scale = min(1., 640. / w)
+    if type(detection_width) is not int or detection_width <= 0:
+        raise ValueError('Detection width must be a positive integer')
+    scale = min(1., detection_width / w)
     small = cv2.resize(frame, (round(w*scale), round(h*scale))) if scale < 1 else frame
     hsv = cv2.cvtColor(cv2.GaussianBlur(small, (5, 5), 0), cv2.COLOR_BGR2HSV)
     mask = cv2.inRange(hsv, np.array(hsv_low, dtype=np.uint8), np.array(hsv_high, dtype=np.uint8))
@@ -64,12 +68,14 @@ class BallTracker:
         self.node, self.grabber = node, grabber
         defaults = {'ball_gain': .18, 'ball_max_command': .15, 'ball_deadband': .08,
                     'ball_yaw_sign': -1., 'ball_heave_sign': -1.,
-                    'ball_h_min': 20, 'ball_h_max': 45, 'ball_s_min': 90, 'ball_v_min': 80}
+                    'ball_h_min': 15, 'ball_h_max': 55, 'ball_s_min': 50, 'ball_v_min': 50,
+                    'ball_detection_width': 960}
         for name, value in defaults.items():
             node.declare_parameter(name, value)
         self.params = {name: node.get_parameter(name).value for name in defaults}
         p = self.params
-        if (not all(math.isfinite(v) for v in p.values()) or
+        if (type(p['ball_detection_width']) is not int or p['ball_detection_width'] <= 0 or
+            not all(math.isfinite(v) for v in p.values()) or
             not 0 < p['ball_gain'] <= 1 or not 0 < p['ball_max_command'] <= .3 or
             not 0 <= p['ball_deadband'] < 1 or
             p['ball_yaw_sign'] not in (-1, 1) or p['ball_heave_sign'] not in (-1, 1) or
@@ -108,7 +114,7 @@ class BallTracker:
             self.frame_stamp = stamp
             p = self.params
             target = detect_ball(frame, (p['ball_h_min'], p['ball_s_min'], p['ball_v_min']),
-                                 (p['ball_h_max'], 255, 255))
+                                 (p['ball_h_max'], 255, 255), p['ball_detection_width'])
             continuous = (target is not None and self.previous is not None and
                           math.hypot(target[0]-self.previous[0], target[1]-self.previous[1]) < frame.shape[1]*.12)
             self.count = self.count+1 if continuous else (1 if target is not None else 0)

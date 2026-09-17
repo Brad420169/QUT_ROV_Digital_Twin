@@ -15,15 +15,15 @@ class VisionGate:
         # On first contact, a camera between 75 and 80 may already be cooling
         # from a thermal trip. Do not clear it until below the recovery threshold.
         if self.hot is None:
-            self.hot = temperature >= 75
+            self.hot = temperature >= 79.5
         if temperature >= 80:
             self.hot = True
-        elif temperature < 75:
+        elif temperature < 79.5:
             self.hot = False
         if self.hot:
             return False, (f'Camera is at max temp (80 C) / cooling: {temperature:.1f} C. '
                            f'Thermal mode: 5 fps; measured {fps:.1f} fps. '
-                           'All vision control disabled until below 75 C.')
+                           'All vision control disabled until below 79.5 C.')
         if frame_age > 1 or fps < 10:
             return False, f'Camera feed slow or unavailable ({fps:.1f} fps); all vision control disabled.'
         return True, f'Camera ready: {temperature:.1f} C, {fps:.1f} fps. Vision permitted, not automatically enabled.'

@@ -26,6 +26,32 @@ def test_detection_and_pixel_commands():
     assert tracker.detect_ball(np.zeros((480, 640, 3), dtype=np.uint8)) is None
 
 
+@pytest.mark.parametrize('colour', [(17, 255, 255), (52, 255, 255), (30, 65, 255), (30, 255, 65)])
+def test_more_sensitive_colour_defaults(colour):
+    hsv = np.zeros((480, 640, 3), dtype=np.uint8)
+    cv2.circle(hsv, (320, 240), 25, colour, -1)
+    frame = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+    target = tracker.detect_ball(frame)
+    assert target is not None
+    assert target[:2] == pytest.approx((320, 240), abs=2)
+    assert tracker.detect_ball(frame, (20, 90, 80), (45, 255, 255)) is None
+
+
+@pytest.mark.parametrize('width', [640, 960, 1920, 2560])
+def test_detection_width_preserves_original_coordinates(width):
+    frame = np.zeros((1080, 1920, 3), dtype=np.uint8)
+    cv2.circle(frame, (1200, 600), 60, (0, 255, 255), -1)
+    target = tracker.detect_ball(frame, detection_width=width)
+    assert target is not None
+    assert target[:2] == pytest.approx((1200, 600), abs=3)
+
+
+@pytest.mark.parametrize('width', [0, -1, 960.5, True])
+def test_invalid_detection_width(width):
+    with pytest.raises(ValueError, match='positive integer'):
+        tracker.detect_ball(frame_at(), detection_width=width)
+
+
 def test_tracker_acquisition_loss_and_enable_timeout(monkeypatch):
     now = [10.0]
     monkeypatch.setattr(tracker.time, 'monotonic', lambda: now[0])
@@ -36,6 +62,8 @@ def test_tracker_acquisition_loss_and_enable_timeout(monkeypatch):
     node.create_publisher.side_effect = [Mock(), Mock()]
     grabber = Mock()
     ball = tracker.BallTracker(node, grabber)
+    assert params['ball_detection_width'] == 960
+    assert tuple(params[k] for k in ('ball_h_min', 'ball_h_max', 'ball_s_min', 'ball_v_min')) == (15, 55, 50, 50)
     ball.enable_callback(SimpleNamespace(data=True))
 
     def tick(frame, age=0):
