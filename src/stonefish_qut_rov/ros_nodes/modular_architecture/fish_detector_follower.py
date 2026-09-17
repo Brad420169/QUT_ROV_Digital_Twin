@@ -655,10 +655,6 @@ class FishDetectorFollower(Node):
                 else float("inf")
             )
 
-            # x_error = cx_fish - centre_x
-            # y_error = cy_fish - centre_y
-
-
             lines = [
                 (f"Distance: {estimated_distance:.2f} m", (0, 255, 255)),
             ]

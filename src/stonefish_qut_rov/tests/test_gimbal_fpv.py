@@ -4,8 +4,11 @@ from pathlib import Path
 import struct
 import sys
 import unittest
+import time
+from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'ros_nodes/modular_architecture'))
-from gimbal_fpv import Connection, make_packet
+from gimbal_fpv import Connection, make_packet, FPVHold
+from gimbal_motor import MotorControl, CONTROLLER_SHA256
 
 
 class Socket:
@@ -20,6 +23,60 @@ class Socket:
 
 
 class ProtocolTests(unittest.TestCase):
+    def test_window_motor_lifecycle(self):
+        calls = []
+
+        class Motors:
+            def __init__(self, host):
+                pass
+            def set_enabled(self, enabled):
+                calls.append(enabled)
+
+        class Link:
+            def __init__(self, sock):
+                pass
+            def exchange(self, packet):
+                reply = bytearray(72)
+                reply[5] = 0x1c
+                return reply
+
+        def wait_for(predicate):
+            deadline = time.monotonic() + 2
+            while not predicate() and time.monotonic() < deadline:
+                time.sleep(.01)
+            self.assertTrue(predicate(), calls)
+
+        with patch('gimbal_fpv.MotorControl', Motors), \
+             patch('gimbal_fpv.socket.create_connection'), \
+             patch('gimbal_fpv.Connection', Link):
+            worker = FPVHold('192.168.144.108', visible=False, log=lambda _: None)
+            try:
+                wait_for(lambda: calls == [False])
+                worker.set_visible(True)
+                wait_for(lambda: calls == [False, True])
+                worker.set_visible(False)
+                wait_for(lambda: calls == [False, True, False])
+                worker.set_visible(True)
+                wait_for(lambda: calls == [False, True, False, True])
+            finally:
+                worker.stop()
+            self.assertFalse(worker.thread.is_alive())
+            self.assertEqual(calls, [False, True, False, True, False])
+
+    def test_remote_command_checks_firmware_and_rediscovers_pid(self):
+        motor = MotorControl('192.168.144.108')
+        motor.remote = '/tmp/test-helper'
+        with patch.object(motor, 'run', return_value=b'') as run:
+            motor.set_enabled(False)
+            command = run.call_args.args[0][-1]
+            self.assertIn(CONTROLLER_SHA256, command)
+            self.assertIn('pidof gb_control', command)
+            self.assertTrue(command.endswith('"$1" stop'))
+        with patch.object(motor, 'run', side_effect=OSError('disconnected')):
+            with self.assertRaises(OSError):
+                motor.set_enabled(True)
+        self.assertIsNone(motor.remote)
+
     def test_target_encoding(self):
         p = make_packet(90, -90, 0x1c)
         self.assertEqual(len(p), 72)

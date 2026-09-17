@@ -34,7 +34,6 @@ class PIDController:
         setpoint: float,
         measurement: float,
         dt: float,
-        measurement_rate: float | None = None,
     ) -> float:
         if dt <= 0.0:
             return 0.0
@@ -52,10 +51,7 @@ class PIDController:
         )
         i_term = self.ki * self._integral
 
-        if measurement_rate is not None:
-            d_term = -self.kd * measurement_rate
-
-        elif self._prev_measurement is not None:
+        if self._prev_measurement is not None:
             d_measurement = measurement - self._prev_measurement
 
             if self.wrap_angle:

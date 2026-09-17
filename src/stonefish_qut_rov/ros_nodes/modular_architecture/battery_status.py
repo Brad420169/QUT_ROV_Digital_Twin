@@ -1,6 +1,10 @@
 """Battery presentation for the operator."""
 import math
+import numpy as np
 from rov_config import BATTERY_CELL_CURVE, BATTERY_CELLS, BATTERY_MIN_PLAUSIBLE_V
+
+_CURVE_V = [v for v, _ in BATTERY_CELL_CURVE]
+_CURVE_PCT = [pct for _, pct in BATTERY_CELL_CURVE]
 
 def percent_from_voltage(voltage: float):
     """
@@ -14,23 +18,7 @@ def percent_from_voltage(voltage: float):
         return None
 
     cell = voltage / BATTERY_CELLS
-
-    if cell <= BATTERY_CELL_CURVE[0][0]:
-        return 0.0
-
-    if cell >= BATTERY_CELL_CURVE[-1][0]:
-        return 100.0
-
-    for index in range(1, len(BATTERY_CELL_CURVE)):
-        low_v, low_pct = BATTERY_CELL_CURVE[index - 1]
-        high_v, high_pct = BATTERY_CELL_CURVE[index]
-
-        if cell <= high_v:
-            span = high_v - low_v
-            fraction = 0.0 if span == 0 else (cell - low_v) / span
-            return low_pct + fraction * (high_pct - low_pct)
-
-    return 100.0
+    return float(np.interp(cell, _CURVE_V, _CURVE_PCT))
 
 def report_battery(node, battery, mode):
     """Print the pack state. B button."""

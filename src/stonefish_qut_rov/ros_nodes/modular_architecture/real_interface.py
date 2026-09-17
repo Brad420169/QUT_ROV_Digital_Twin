@@ -76,7 +76,6 @@ from rov_config import (
     REAL_PITCH_INVERT,
     REAL_SURFACE_PRESSURE_PA,
     FRESH_WATER_DENSITY,
-    REAL_SPEED_SCALE,
 )
 from command_watchdog import Freshness
 from node_lifecycle import run_node
@@ -372,11 +371,9 @@ class RealInterface(Node):
             self.rc_pub.publish(msg)
             return
 
-    
-
-        surge = clamp(self.command.surge) * REAL_SPEED_SCALE
-        heave = clamp(self.command.heave) * REAL_SPEED_SCALE
-        yaw   = clamp(self.command.yaw) * REAL_SPEED_SCALE
+        surge = clamp(self.command.surge)
+        heave = clamp(self.command.heave)
+        yaw   = clamp(self.command.yaw)
 
         if REAL_INVERT_SURGE_CMD:
             surge = -surge
@@ -389,7 +386,6 @@ class RealInterface(Node):
         channels[2] = normalised_to_rc(heave)   # ch3 — throttle / heave
         channels[3] = normalised_to_rc(yaw)     # ch4 — yaw
         channels[4] = normalised_to_rc(surge)   # ch5 — forward / surge
-
 
         msg.channels = channels
         self.rc_pub.publish(msg)

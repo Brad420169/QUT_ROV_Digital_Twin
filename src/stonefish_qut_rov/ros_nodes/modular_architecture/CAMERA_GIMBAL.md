@@ -1,15 +1,27 @@
 # Real-camera FPV hold
 
-The real RTSP viewer starts an independent TCP worker that commands XF FPV
-mode (0x1C), pitch +90°, yaw -90°, roll 0°, at 40 Hz. Angles are relative to
-the camera mounting body. Hiding the camera window does not stop the hold.
-The worker retries connections and reapplies the target after camera restart.
-It needs Ethernet access to 192.168.144.108:2332 as well as the RTSP service.
+The real RTSP viewer starts a worker that first disables the gimbal motors.
+Opening the camera window selects XF FPV mode (0x1C), applies the configured
+body-relative angles at 40 Hz, and enables the motors. Hiding/closing the window
+(Y, q, Escape, or the window close button) disables the motors again. Viewer
+shutdown also requests motor stop. The worker retries failed operations every
+two seconds and reports failures instead of claiming the gimbal is limp.
 
-Starting the viewer now automatically moves the gimbal to this pose. Avoid
-running another gimbal controller concurrently. Stopping the viewer closes
-the control connection without commanding a return to zero. No startup pose
-is written to the camera's persistent memory; the viewer must run to apply it.
+Motor start/stop uses SSH to the camera's internal UART; TCP angle commands alone
+do not disable holding torque. Requires trusted, noninteractive root SSH key
+access and `arm-linux-gnueabihf-gcc` on the host (already installed on Brad's PC).
+The small C helper is compiled and uploaded to camera `/tmp` automatically.
+It briefly pauses `gb_control`, preserves its current command fields, sends the
+documented motor command, checks the CRC/status acknowledgement, and resumes
+the controller. An independent two-second guard resumes it if the helper dies.
+No firmware or persistent settings are changed. Power cycling enables motors
+again. This helper is restricted to the verified controller SHA256 in
+`gimbal_motor.py`; firmware updates require re-verifying its RAM layout.
+
+Avoid other gimbal controllers during use. A lost Ethernet connection or forced
+process kill can prevent shutdown stop from reaching the camera; consult logs.
+Setting `gimbal_hold_enabled:=false` disables ALL motor/hold management, for a
+video-only viewer; it does not itself send a limp command.
 
 Startup ROS parameters (restart the viewer to change):
 

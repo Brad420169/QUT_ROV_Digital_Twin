@@ -39,6 +39,8 @@ install(
     ros_nodes/modular_architecture/process_utils.py
     ros_nodes/modular_architecture/viewer_manager.py
     ros_nodes/modular_architecture/gimbal_fpv.py
+    ros_nodes/modular_architecture/gimbal_motor.py
+    ros_nodes/modular_architecture/gimbal_motor.c
     ros_nodes/modular_architecture/camera_thermal.py
     ros_nodes/modular_architecture/tennis_ball_tracker.py
     ros_nodes/modular_architecture/battery_status.py

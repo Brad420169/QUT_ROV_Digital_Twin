@@ -217,14 +217,13 @@ def main(args=None):
     rclpy.init(args=args)
     node = ViewerNode()
 
-    gimbal = None
-    if node.get_parameter("gimbal_hold_enabled").value:
-        gimbal = FPVHold(
-            node.get_parameter("gimbal_host").value,
-            pitch=node.get_parameter("gimbal_pitch_deg").value,
-            yaw=node.get_parameter("gimbal_yaw_deg").value,
-            log=node.get_logger().info,
-        )
+    # One worker owns motor state: limp at startup/hidden, FPV while visible.
+    hold_enabled = node.get_parameter("gimbal_hold_enabled").value
+    gimbal_host = node.get_parameter("gimbal_host").value
+    gimbal_pitch = node.get_parameter("gimbal_pitch_deg").value
+    gimbal_yaw = node.get_parameter("gimbal_yaw_deg").value
+    gimbal = FPVHold(gimbal_host, pitch=gimbal_pitch, yaw=gimbal_yaw,
+                     log=node.get_logger().info, visible=False) if hold_enabled else None
 
     grabber = FrameGrabber(REAL_RTSP_URL)
     node.start_health(grabber)
@@ -253,6 +252,9 @@ def main(args=None):
                 if not window_open:
                     cv2.namedWindow(WINDOW, cv2.WINDOW_NORMAL)
                     window_open = True
+
+                    if gimbal is not None:
+                        gimbal.set_visible(True)
 
                 frame = grabber.latest()
                 if frame is None:
@@ -296,6 +298,9 @@ def main(args=None):
                     cv2.waitKey(1)
                     window_open = False
 
+                    if gimbal is not None:
+                        gimbal.set_visible(False)
+
                 # Idle without burning CPU. The grabber keeps the RTSP
                 # connection alive in the background.
                 time.sleep(0.1)
@@ -304,12 +309,12 @@ def main(args=None):
         pass
 
     finally:
+        if gimbal is not None:
+            gimbal.stop()
         tracker.stop()
         node.health_timer.cancel()
         node.allowed_pub.publish(Bool(data=False))
         node.temperature.stop()
-        if gimbal is not None:
-            gimbal.stop()
         grabber.stop()
         cv2.destroyAllWindows()
         if rclpy.ok():

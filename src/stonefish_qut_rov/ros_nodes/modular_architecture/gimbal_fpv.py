@@ -5,6 +5,7 @@ import socket
 import struct
 import threading
 import time
+from gimbal_motor import MotorControl
 
 
 def make_packet(pitch, yaw, order=0):
@@ -51,12 +52,8 @@ class Connection:
 
 
 class FPVHold:
-    """Maintain the target at 40 Hz; retry dropped connections every two seconds.
-
-    Closing leaves the last target in the camera, rather than sending zero
-    angles (which would command a different pose). This does not save flash.
-    """
-    def __init__(self, host, pitch=-90., yaw=-90., log=print):
+    """Own motor power and FPV hold; hidden windows release holding torque."""
+    def __init__(self, host, pitch=-90., yaw=-90., log=print, visible=True):
         self.host, self.log = host, log
         self.target = make_packet(pitch, yaw)
         self.mode = make_packet(pitch, yaw, 0x1c)
@@ -65,13 +62,39 @@ class FPVHold:
         query[5:12] = bytes(7)
         self.query = bytes(query) + binascii.crc_hqx(query, 0).to_bytes(2, 'big')
         self.done = threading.Event()
+        self.visible = threading.Event()
+        if visible:
+            self.visible.set()
+        self.motors = MotorControl(host)
         self.thread = threading.Thread(target=self._run, daemon=True)
         self.thread.start()
 
     def _run(self):
+        try:
+            self._control_loop()
+        finally:
+            try:
+                self.motors.set_enabled(False)
+                self.log('Gimbal motors stopped (limp).')
+            except OSError as exc:
+                self.log(f'Gimbal stop NOT confirmed: {exc}')
+
+    def _control_loop(self):
+        motor_enabled = None
         failure_logged = False
         while not self.done.is_set():
             try:
+                # Always establish limp at startup, even with start_visible.
+                if motor_enabled is None or not self.visible.is_set():
+                    if motor_enabled is not False:
+                        self.motors.set_enabled(False)
+                        motor_enabled = False
+                        self.log('Gimbal motors stopped (limp).')
+                    if not self.visible.is_set():
+                        self.done.wait(.1)
+                        continue
+                if self.done.is_set():
+                    break
                 with socket.create_connection((self.host, 2332), timeout=1) as sock:
                     link = Connection(sock)
                     link.exchange(self.query)  # Separate repeated mode commands.
@@ -88,20 +111,32 @@ class FPVHold:
                             break
                     if not ready:
                         raise ValueError('FPV mode not confirmed')
+                    if self.done.is_set() or not self.visible.is_set():
+                        continue
+                    self.motors.set_enabled(True)
+                    motor_enabled = True
                     self.log('Gimbal FPV hold active (body-relative target).')
                     failure_logged = False
-                    while not self.done.is_set():
+                    while not self.done.is_set() and self.visible.is_set():
                         tick = time.monotonic()
                         status = link.exchange(self.target)
                         if status[5] != 0x1c:
                             raise ValueError('Gimbal mode overridden; check other controllers')
                         self.done.wait(max(0, .025 - (time.monotonic() - tick)))
             except (OSError, ValueError) as exc:
+                # A partial activation or lost connection must trigger a stop.
+                motor_enabled = None
                 if not self.done.is_set() and not failure_logged:
                     self.log(f'Gimbal hold unavailable: {exc}; retrying in 2 seconds.')
                     failure_logged = True
                 self.done.wait(2)
 
+    def set_visible(self, visible):
+        if visible:
+            self.visible.set()
+        else:
+            self.visible.clear()
+
     def stop(self):
         self.done.set()
-        self.thread.join(timeout=3)
+        self.thread.join(timeout=20)

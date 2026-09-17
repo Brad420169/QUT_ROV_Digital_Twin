@@ -4,6 +4,9 @@ import signal
 import subprocess
 import time
 
+# Shared by both termination paths below; SIGKILL always ends the ladder.
+_ESCALATION = ((signal.SIGINT, 3.0), (signal.SIGTERM, 2.0), (signal.SIGKILL, 1.0))
+
 
 def start_process(command, log_file=None, *, new_session=True):
     print("$", " ".join(command), flush=True)
@@ -18,7 +21,7 @@ def stop_process(process, name="process", *, process_group=True):
     if process is None:
         return
     if not process_group:
-        for sig, timeout in ((signal.SIGINT, 3.0), (signal.SIGTERM, 2.0), (signal.SIGKILL, 1.0)):
+        for sig, timeout in _ESCALATION:
             if process.poll() is not None:
                 return
             process.send_signal(sig)
@@ -30,7 +33,7 @@ def stop_process(process, name="process", *, process_group=True):
         return
     # The leader may already have exited while its children are still alive.
     # Group leaders passed here were started with new_session=True.
-    for sig, timeout in ((signal.SIGINT, 3.0), (signal.SIGTERM, 2.0), (signal.SIGKILL, 1.0)):
+    for sig, timeout in _ESCALATION:
         try:
             os.killpg(process.pid, sig)
         except ProcessLookupError:

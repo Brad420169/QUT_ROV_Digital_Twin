@@ -2,13 +2,6 @@
 SIM-TO-REAL TUNING FILE
 =======================
 
-The ONLY file you should need to edit at the pool.
-
-Everything in rov_config.py is the SIM value and stays canonical — the DT
-is the reference. This file holds the corrections applied when running in
-real mode, plus the handful of real-only hardware constants that change
-between deployments (surface pressure, axis directions, RC range).
-
 Nothing here affects sim mode except where noted. Sim always runs
 unscaled.
 
@@ -61,9 +54,9 @@ REAL_PITCH_INVERT = True
 # first wet run. Dropping all three to ~0.5 is a sensible first-splash
 # setting, then work back up.
 
-REAL_SCALE_MANUAL_SURGE = 1.0
-REAL_SCALE_MANUAL_YAW   = 1.0
-REAL_SCALE_MANUAL_HEAVE = 1.0
+REAL_SCALE_MANUAL_SURGE = 0.5
+REAL_SCALE_MANUAL_YAW   = 0.5
+REAL_SCALE_MANUAL_HEAVE = 0.5
 
 
 # ─────────────────────────────────────────────────────────────────────

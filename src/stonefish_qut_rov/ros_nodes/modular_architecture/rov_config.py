@@ -2,11 +2,6 @@
 Central configuration for the QUT ROV control stack.
 """
 
-
-# Scale real speed
-
-REAL_SPEED_SCALE = 0.5
-
 # COMMON ROS TOPICS
 JOY_TOPIC       = "/joy"
 CMD_VEL_TOPIC   = "/qut_rov/cmd_vel"
