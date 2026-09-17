@@ -7,13 +7,16 @@ import threading
 import time
 from gimbal_motor import MotorControl
 
+PITCH_MIN_DEG = -145.0  # Z-1 Mini manual's published lower pitch limit.
+PITCH_MAX_DEG = 90.0  # Preserve the existing upper command range.
 
-def make_packet(pitch, yaw, order=0):
-    if not all(math.isfinite(v) and -90 <= v <= 90 for v in (pitch, yaw)):
-        raise ValueError('FPV targets must be finite and within ±90 degrees')
+def make_packet(pitch, yaw, order=0, roll=0):
+    if (not all(math.isfinite(v) and -90 <= v <= 90 for v in (roll, yaw))
+            or not math.isfinite(pitch) or not PITCH_MIN_DEG <= pitch <= PITCH_MAX_DEG):
+        raise ValueError('FPV targets: roll/yaw ±90°, pitch -145° to +90°; all finite')
     data = bytearray(70)
     data[:5] = bytes.fromhex('a8 e5 48 00 02')
-    struct.pack_into('<hhh', data, 5, 0, round(pitch * 100), round(yaw * 100))
+    struct.pack_into('<hhh', data, 5, round(roll * 100), round(pitch * 100), round(yaw * 100))
     data[11] = 4  # Valid angles, no fabricated carrier INS data.
     data[30] = 1
     data[69] = order
@@ -55,6 +58,7 @@ class FPVHold:
     """Own motor power and FPV hold; hidden windows release holding torque."""
     def __init__(self, host, pitch=-90., yaw=-90., log=print, visible=True):
         self.host, self.log = host, log
+        self.roll, self.pitch, self.yaw = 0., pitch, yaw
         self.target = make_packet(pitch, yaw)
         self.mode = make_packet(pitch, yaw, 0x1c)
         # Mode-independent query: never interpret target angles as rate commands.
@@ -136,6 +140,14 @@ class FPVHold:
             self.visible.set()
         else:
             self.visible.clear()
+
+    def nudge(self, roll, pitch):
+        if not self.visible.is_set():
+            return
+        self.roll = max(-45., min(45., self.roll + roll))
+        self.pitch = max(PITCH_MIN_DEG, min(PITCH_MAX_DEG, self.pitch + pitch))
+        self.target = make_packet(self.pitch, self.yaw, roll=self.roll)
+        self.mode = make_packet(self.pitch, self.yaw, 0x1c, roll=self.roll)
 
     def stop(self):
         self.done.set()

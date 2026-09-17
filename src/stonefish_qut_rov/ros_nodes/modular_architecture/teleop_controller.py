@@ -264,6 +264,14 @@ class GamepadTeleop(Node):
         self.viewers = ViewerManager(self, self.package_name, self.rov_mode)
         if self.rov_mode == "real":
             self.viewers.start_camera()
+            self.arm_ready_pub = self.create_publisher(Bool, '/qut_rov/teleop_arm_ready', 1)
+            self.arm_ready_timer = self.create_timer(.25, self.publish_arm_ready)
+
+    def publish_arm_ready(self):
+        ready = (not self._manual_rearm and self.inputs['joy'].fresh()
+                 and not self._shutdown_requested
+                 and self.arm_toggle_pub.get_subscription_count() > 0)
+        self.arm_ready_pub.publish(Bool(data=ready))
 
     # SENSOR CALLBACKS
     def depth_callback(self, msg: Float64):
@@ -499,6 +507,17 @@ class GamepadTeleop(Node):
         Down — must be HELD for DPAD_SHUTDOWN_HOLD_S to shut the stack
                down, so a stray thumb cannot kill teleop mid-dive.
         """
+        if self.rov_mode == 'real' and (self.viewers.visible or self.viewers.camera_visible):
+            # Camera viewer consumes D-pad for gimbal roll/pitch while shown.
+            self._plot_pressed_last = True
+            self._shutdown_hold_start = None
+            self._camera_dpad_release = True
+            return
+        if getattr(self, '_camera_dpad_release', False):
+            if len(axes) > AXIS_DPAD_Y and abs(axes[AXIS_DPAD_Y]) < DPAD_PRESS_LEVEL:
+                self._camera_dpad_release = False
+                self._plot_pressed_last = False
+            return
         if len(axes) <= AXIS_DPAD_Y:
             return
 

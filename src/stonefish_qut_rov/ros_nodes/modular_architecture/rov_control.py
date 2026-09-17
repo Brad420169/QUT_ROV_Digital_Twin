@@ -8,13 +8,15 @@ import time
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Imu, Joy
-from std_msgs.msg import Float64
+from std_msgs.msg import Bool, Float64
+from mavros_msgs.msg import State
+from mavros_msgs.srv import CommandBool
 
 from node_lifecycle import run_node
 from process_utils import start_process, stop_process
 from rov_config import (DEPTH_TOPIC, IMU_TOPIC, JOY_TOPIC, REAL_FCU_URL,
                         REAL_INTERFACE_EXECUTABLE, STARTUP_TIMEOUT_S,
-                        JOY_TIMEOUT_S, SENSOR_TIMEOUT_S)
+                        JOY_TIMEOUT_S, SENSOR_TIMEOUT_S, REAL_ARMING_SERVICE)
 
 PACKAGE = "stonefish_qut_rov"
 MAVROS_LOG_FILE = "/tmp/mavros.log"
@@ -36,8 +38,15 @@ def print_controls(rov_mode: str):
     print("║ X button          Fish follow (Cam Window)   ║")
     print("║ A button          Arm / disarm               ║")
     print("║ B button          Battery level              ║")
-    print("║ D-pad ↑           Depth / IMU plotter        ║")
+    if rov_mode == 'real':
+        print("║ Camera shown:                                ║")
+        print("║ D-pad ↑↓ / ←→     Gimbal pitch / roll        ║")
+        print("║                   Hold to move (20 deg/s)    ║")
+        print("║ Camera hidden:                               ║")
+    print("║ D-pad ↑           Toggle depth / IMU plots   ║")
     print("║ D-pad ↓ (hold 1s) Shut down                  ║")
+    if rov_mode == 'real':
+        print("║ Release D-pad after opening/closing camera.  ║")
     print("╠══════════════════════════════════════════════╣")
     print(f"║ Mode: {rov_mode.upper():<39}║")
     print(f"║ Fish follow: {fish_text:<32}║")
@@ -55,11 +64,23 @@ class StackSupervisor(Node):
         self._shutdown_requested = False
         self.received = {}
         self.started = time.monotonic()
+        self.controls_printed = False
+        self.fcu_ready_at = -math.inf
         self.subscriptions_ready = [
             self.create_subscription(Float64, DEPTH_TOPIC, self.depth_ready, qos_profile_sensor_data),
             self.create_subscription(Imu, IMU_TOPIC, self.imu_ready, qos_profile_sensor_data),
             self.create_subscription(Joy, JOY_TOPIC, self.joy_ready, qos_profile_sensor_data),
         ]
+        if mode == 'real':
+            self.arm_client = self.create_client(CommandBool, REAL_ARMING_SERVICE)
+            self.subscriptions_ready.extend([
+                self.create_subscription(Bool, '/qut_rov/camera_connected',
+                    lambda msg: self.readiness('camera', msg), 1),
+                self.create_subscription(Bool, '/qut_rov/teleop_arm_ready',
+                    lambda msg: self.readiness('arm', msg), 1),
+                self.create_subscription(State, '/mavros/state', self.fcu_ready,
+                                         qos_profile_sensor_data),
+            ])
         try:
             if mode == "sim":
                 self.start("Stonefish", ["ros2", "launch", PACKAGE, "launch_rov.py"])
@@ -98,6 +119,24 @@ class StackSupervisor(Node):
         if msg.axes and all(math.isfinite(v) for v in msg.axes):
             self.received["joy"] = time.monotonic()
 
+    def readiness(self, name, msg):
+        self.received[name] = time.monotonic() if msg.data else -math.inf
+
+    def fcu_ready(self, msg):
+        self.fcu_ready_at = time.monotonic() if msg.connected and msg.mode == 'MANUAL' else -math.inf
+
+    def maybe_print_controls(self):
+        if self.controls_printed:
+            return
+        now = time.monotonic()
+        if self.mode == 'real' and not (
+            all(now - self.received.get(key, -math.inf) < 1.5 for key in ('camera', 'arm'))
+            and now - self.fcu_ready_at < 3.0 and self.arm_client.service_is_ready()
+        ):
+            return
+        print_controls(self.mode)
+        self.controls_printed = True
+
     def monitor(self):
         for name, process in self.processes:
             code = process.poll()
@@ -107,6 +146,7 @@ class StackSupervisor(Node):
                 self._shutdown_requested = True
                 return
         if self.teleop is not None:
+            self.maybe_print_controls()
             return
         now = time.monotonic()
         missing = [name for name, timeout in (("joy", JOY_TIMEOUT_S), ("depth", SENSOR_TIMEOUT_S),
@@ -115,7 +155,7 @@ class StackSupervisor(Node):
         if not missing:
             self.teleop = self.start("teleop", ["ros2", "run", PACKAGE, "teleop_controller.py",
                 "--ros-args", "-p", f"rov_mode:={self.mode}", "-p", f"package_name:={PACKAGE}"])
-            print_controls(self.mode)
+            self.maybe_print_controls()
             self.get_logger().info("Stack started. Release controls to neutral to enable manual control.")
         elif now - self.started > STARTUP_TIMEOUT_S:
             self.get_logger().error(f"Startup timed out waiting for: {', '.join(missing)}")

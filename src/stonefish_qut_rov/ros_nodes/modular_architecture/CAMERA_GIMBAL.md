@@ -7,6 +7,16 @@ body-relative angles at 40 Hz, and enables the motors. Hiding/closing the window
 shutdown also requests motor stop. The worker retries failed operations every
 two seconds and reports failures instead of claiming the gimbal is limp.
 
+While the physical camera window is shown, D-pad up/down changes pitch and
+left/right changes roll continuously while held, at 20 degrees/second.
+Release stops movement; joystick data older than 0.5 seconds also stops movement
+and requires releasing the D-pad before moving again.
+Yaw stays fixed. Targets are bounded to roll ±45° and pitch -145° to +90° and retained
+when reopening the window. Release the D-pad after opening before aiming.
+The camera publishes actual visibility on `/qut_rov/camera_visible`; teleop
+suppresses the plot and shutdown shortcuts while shown. After closing, release
+the D-pad before using those shortcuts again. This does not alter stick controls.
+
 Motor start/stop uses SSH to the camera's internal UART; TCP angle commands alone
 do not disable holding torque. Requires trusted, noninteractive root SSH key
 access and `arm-linux-gnueabihf-gcc` on the host (already installed on Brad's PC).
@@ -38,7 +48,10 @@ ros2 run stonefish_qut_rov camera_viewer_rtsp.py --ros-args \
 ```
 
 `gimbal_host` defaults to REAL_CAMERA_IP in rov_config.py. Targets are
-restricted to ±90° in this implementation, not a statement of hardware limits.
+restricted to roll/yaw ±90° and pitch -145° to +90° in the packet encoder.
+The lower pitch limit follows the Z-1 Mini manual's -145° value; the existing
+upper command range is preserved. Actual travel also depends on camera firmware
+and mounting; these are command limits, not measured travel.
 Control errors are logged and do not stop video. Mode changes from another
 controller cause reconnection and FPV reapplication.
 

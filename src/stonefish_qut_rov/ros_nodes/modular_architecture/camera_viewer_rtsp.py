@@ -20,6 +20,7 @@ Standalone (window opens immediately):
 """
 
 import os
+import math
 import signal
 import threading
 import time
@@ -40,6 +41,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, DurabilityPolicy
 from std_msgs.msg import Bool, Float32, String
+from sensor_msgs.msg import Joy
 from gimbal_fpv import FPVHold
 from camera_thermal import TemperatureMonitor, VisionGate
 from tennis_ball_tracker import BallTracker
@@ -49,6 +51,7 @@ from rov_config import (
     REAL_CAMERA_DISPLAY_WIDTH,
     REAL_RTSP_URL,
     REAL_CAMERA_IP,
+    JOY_TIMEOUT_S,
 )
 
 WINDOW = "SubbyROV - Camera"
@@ -69,6 +72,7 @@ class FrameGrabber:
         self.frame = None
         self.frame_times = deque(maxlen=240)
         self.running = True
+        self.connected = threading.Event()  # Set once the first real frame arrives.
 
         self.thread = threading.Thread(target=self._loop, daemon=True)
         self.thread.start()
@@ -117,6 +121,7 @@ class FrameGrabber:
             with self.lock:
                 self.frame = frame
                 self.frame_times.append(time.monotonic())
+            self.connected.set()
 
         if cap is not None:
             cap.release()
@@ -158,6 +163,16 @@ class ViewerNode(Node):
         self.vision_allowed = False
         self.health_message = 'Waiting for camera health; all vision control disabled.'
         self._health_state = None
+        self.gimbal = None
+        self.window_open = False
+        self._dpad_last = None
+        self._dpad_stamp = float('-inf')
+        self._gimbal_tick = time.monotonic()
+        self.create_timer(.025, self.update_gimbal_aim)
+        self.visible_pub = self.create_publisher(
+            Bool, '/qut_rov/camera_visible',
+            QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL))
+        self.create_subscription(Joy, '/joy', self.gimbal_joy_callback, 10)
         self.show = bool(
             self.get_parameter("start_visible")
             .get_parameter_value()
@@ -184,19 +199,69 @@ class ViewerNode(Node):
         if self.show and not self.vision_allowed:
             self.get_logger().warning(self.health_message)
 
+    def window_visibility(self, visible):
+        self.window_open = visible
+        self._dpad_last = None  # Require release before accepting a new press.
+        if self.gimbal is not None:
+            self.gimbal.set_visible(visible)
+        self.visible_pub.publish(Bool(data=visible))
+
+    def gimbal_joy_callback(self, msg):
+        if not self.window_open or not self.show or self.gimbal is None:
+            self._dpad_last = None
+            return
+        if len(msg.axes) < 8 or not all(math.isfinite(v) for v in msg.axes[6:8]):
+            self._dpad_last = None
+            return
+        x, y = (int(v > .5) - int(v < -.5) for v in msg.axes[6:8])
+        now = time.monotonic()
+        if now - self._dpad_stamp > JOY_TIMEOUT_S:
+            self._dpad_last = None
+        self._dpad_stamp = now
+        if self._dpad_last is None:
+            if (x, y) == (0, 0):
+                self._dpad_last = (0, 0)
+            return
+        self._dpad_last = (x, y)
+
+    def update_gimbal_aim(self):
+        now = time.monotonic()
+        dt = max(0., min(.05, now - self._gimbal_tick))
+        self._gimbal_tick = now
+        if now - self._dpad_stamp > JOY_TIMEOUT_S:
+            self._dpad_last = None
+        if not self.window_open or not self.show or self.gimbal is None or self._dpad_last is None:
+            return
+        x, y = self._dpad_last
+        if x or y:
+            self.gimbal.nudge(-20. * -x * dt, 20. * y * dt)
+
     def start_health(self, grabber):
-        self.temperature = TemperatureMonitor(self.get_parameter('gimbal_host').value)
+        # Publishers are cheap and safe to set up immediately, but the
+        # temperature SSH session and fps read must wait for the RTSP
+        # stream to actually connect first (grabber.connected).
+        self.health_message = 'Waiting for camera connection...'
+        self.temperature = None
         self.gate = VisionGate()
         qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.allowed_pub = self.create_publisher(Bool, '/qut_rov/vision_control_allowed', qos)
         self.health_pub = self.create_publisher(String, '/qut_rov/camera_health', qos)
         self.temp_pub = self.create_publisher(Float32, '/qut_rov/camera_temperature', qos)
-        self.health_timer = self.create_timer(.5, lambda: self.check_health(grabber))
+        self.connected_pub = self.create_publisher(Bool, '/qut_rov/camera_connected', 1)
+        self.health_timer = self.create_timer(.5, lambda: self._poll_health(grabber))
+
+    def _poll_health(self, grabber):
+        if self.temperature is None:
+            if not grabber.connected.is_set():
+                self.connected_pub.publish(Bool(data=False))
+                return
+            self.temperature = TemperatureMonitor(self.get_parameter('gimbal_host').value)
         self.check_health(grabber)
 
     def check_health(self, grabber):
         value, stamp, error = self.temperature.sample
         fps, frame_age = grabber.health()
+        self.connected_pub.publish(Bool(data=frame_age <= 1.0))
         self.vision_allowed, self.health_message = self.gate.evaluate(
             value, time.monotonic()-stamp, fps, frame_age)
         if error:
@@ -224,6 +289,8 @@ def main(args=None):
     gimbal_yaw = node.get_parameter("gimbal_yaw_deg").value
     gimbal = FPVHold(gimbal_host, pitch=gimbal_pitch, yaw=gimbal_yaw,
                      log=node.get_logger().info, visible=False) if hold_enabled else None
+    node.gimbal = gimbal
+    node.window_visibility(False)
 
     grabber = FrameGrabber(REAL_RTSP_URL)
     node.start_health(grabber)
@@ -253,8 +320,7 @@ def main(args=None):
                     cv2.namedWindow(WINDOW, cv2.WINDOW_NORMAL)
                     window_open = True
 
-                    if gimbal is not None:
-                        gimbal.set_visible(True)
+                    node.window_visibility(True)
 
                 frame = grabber.latest()
                 if frame is None:
@@ -298,8 +364,7 @@ def main(args=None):
                     cv2.waitKey(1)
                     window_open = False
 
-                    if gimbal is not None:
-                        gimbal.set_visible(False)
+                    node.window_visibility(False)
 
                 # Idle without burning CPU. The grabber keeps the RTSP
                 # connection alive in the background.
@@ -309,12 +374,14 @@ def main(args=None):
         pass
 
     finally:
+        node.window_visibility(False)
         if gimbal is not None:
             gimbal.stop()
         tracker.stop()
         node.health_timer.cancel()
         node.allowed_pub.publish(Bool(data=False))
-        node.temperature.stop()
+        if node.temperature is not None:
+            node.temperature.stop()
         grabber.stop()
         cv2.destroyAllWindows()
         if rclpy.ok():

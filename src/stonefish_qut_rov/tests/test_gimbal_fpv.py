@@ -84,6 +84,28 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(p[11], 4)
         self.assertEqual(p[69], 0x1c)
         self.assertEqual(int.from_bytes(p[-2:], 'big'), binascii.crc_hqx(p[:-2], 0))
+        p = make_packet(-30, 90, roll=12)
+        self.assertEqual(struct.unpack_from('<hhh', p, 5), (1200, -3000, 9000))
+
+    def test_nudge_is_hidden_gated_and_clamped(self):
+        import threading
+        worker = FPVHold.__new__(FPVHold)
+        worker.visible = threading.Event()
+        worker.roll, worker.pitch, worker.yaw = 0., -90., 90.
+        worker.log = lambda _: None
+        worker.nudge(2, 2)
+        self.assertEqual((worker.roll, worker.pitch), (0., -90.))
+        worker.visible.set()
+        worker.nudge(2, 2)
+        self.assertEqual(struct.unpack_from('<hhh', worker.target, 5), (200, -8800, 9000))
+        worker.nudge(100, 300)
+        self.assertEqual((worker.roll, worker.pitch), (45., 90.))
+        worker.pitch = -90.
+        worker.nudge(0, -2)
+        self.assertEqual(struct.unpack_from('<h', worker.target, 7)[0], -9200)
+        worker.nudge(0, -100)
+        self.assertEqual(worker.pitch, -145.)
+        self.assertEqual(struct.unpack_from('<h', worker.target, 7)[0], -14500)
 
     def test_fragmented_and_combined_replies(self):
         p = bytearray(make_packet(0, 0))
@@ -102,7 +124,7 @@ class ProtocolTests(unittest.TestCase):
             Connection(Socket([bytes(p)])).exchange(b'')
 
     def test_bounds(self):
-        for pitch, yaw in [(float('nan'), 0), (0, 91), (-91, 0)]:
+        for pitch, yaw in [(float('nan'), 0), (0, 91), (-146, 0), (91, 0)]:
             with self.assertRaises(ValueError):
                 make_packet(pitch, yaw)
 

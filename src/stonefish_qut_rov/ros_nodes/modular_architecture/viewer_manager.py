@@ -18,6 +18,10 @@ class ViewerManager:
         self.camera = None
         self.plotter = None
         self.visible = False
+        self.camera_visible = False
+        self.visibility_sub = node.create_subscription(
+            Bool, '/qut_rov/camera_visible', self._camera_visibility,
+            QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL))
         self.retired = ThreadPoolExecutor(max_workers=2)
         self.show_pub = node.create_publisher(
             Bool, CAMERA_SHOW_TOPIC,
@@ -26,6 +30,12 @@ class ViewerManager:
     @staticmethod
     def running(process):
         return process is not None and process.poll() is None
+
+    def _camera_visibility(self, msg):
+        # Reflect local q/Escape/X closure in the next Y-button toggle too.
+        if msg.data or self.camera_visible:
+            self.visible = bool(msg.data)
+        self.camera_visible = bool(msg.data)
 
     def _start(self, executable):
         try:
@@ -61,6 +71,7 @@ class ViewerManager:
     def close_camera(self):
         self._retire(self.camera)
         self.camera = None
+        self.visible = self.camera_visible = False
 
     def toggle_plotter(self):
         if self.running(self.plotter):

@@ -22,6 +22,26 @@ from teleop_controller import GamepadTeleop
 import teleop_controller
 
 
+def test_camera_dpad_overrides_shortcuts_until_release(teleop):
+    teleop.rov_mode = 'real'
+    teleop.viewers.visible = True
+    teleop.viewers.camera_visible = True
+    teleop.toggle_plotter = Mock()
+    teleop._handle_shutdown_hold = Mock()
+    for value in (1., -1., -1.):
+        teleop._handle_dpad([0.] * 7 + [value])
+    teleop.toggle_plotter.assert_not_called()
+    teleop._handle_shutdown_hold.assert_not_called()
+    teleop.viewers.visible = teleop.viewers.camera_visible = False
+    teleop._handle_dpad([0.] * 7 + [-1.])
+    teleop._handle_shutdown_hold.assert_not_called()
+    teleop._handle_dpad([0.] * 8)
+    teleop._handle_dpad([0.] * 7 + [1.])
+    teleop.toggle_plotter.assert_called_once()
+    teleop._handle_dpad([0.] * 7 + [-1.])
+    teleop._handle_shutdown_hold.assert_called_with(True)
+
+
 @pytest.fixture(autouse=True)
 def context():
     rclpy.init(args=[])
