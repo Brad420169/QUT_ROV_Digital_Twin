@@ -40,6 +40,7 @@ Prerequisites:
 """
 
 import math
+import time
 
 import rclpy
 from geometry_msgs.msg import Twist
@@ -74,7 +75,6 @@ from rov_config import (
     REAL_SET_MODE_SERVICE,
     REAL_YAW_INVERT,
     REAL_PITCH_INVERT,
-    REAL_SURFACE_PRESSURE_PA,
     FRESH_WATER_DENSITY,
 )
 from command_watchdog import Freshness
@@ -109,6 +109,14 @@ class RealInterface(Node):
         super().__init__("real_interface")
 
         self.command = VehicleCommand()
+        self.surface_pressure_pa = None
+        self._pressure_samples = []
+        self._pressure_sample_time = None
+        self.get_logger().info(
+            'Measuring Pa for depth calibration: keep the pressure sensor in air '
+            'and the vehicle disarmed. Averaging 30 samples over at least 3 seconds; '
+            'depth output is withheld until ready.'
+        )
 
         # Watchdog state
         self.command_freshness = Freshness(COMMAND_TIMEOUT_S)
@@ -292,9 +300,35 @@ class RealInterface(Node):
     # Sensor bridges -> common topics
     # ------------------------------------------------------------------
     def pressure_callback(self, msg: FluidPressure):
-        if not math.isfinite(msg.fluid_pressure):
+        pressure = float(msg.fluid_pressure)
+        if not math.isfinite(pressure) or pressure <= 0:
+            if self.surface_pressure_pa is None:
+                self._pressure_samples.clear()
+                self._pressure_sample_time = None
             return
-        gauge_pressure = float(msg.fluid_pressure) - REAL_SURFACE_PRESSURE_PA
+        if self.surface_pressure_pa is None:
+            now = time.monotonic()
+            if self._pressure_sample_time is not None:
+                gap = now - self._pressure_sample_time
+                if gap > 1.0 or gap < 0:
+                    self._pressure_samples.clear()
+                    self.get_logger().warning('Pressure sampling interrupted; restarting depth calibration.')
+                elif gap < .11:
+                    return  # Spread samples across time, not a queued burst.
+            self._pressure_sample_time = now
+            self._pressure_samples.append(pressure)
+            count = len(self._pressure_samples)
+            if count < 30:
+                if count % 10 == 0:
+                    self.get_logger().info(f'Measuring Pa for depth calibration: {count}/30 samples.')
+                return
+            self.surface_pressure_pa = math.fsum(self._pressure_samples) / count
+            self.get_logger().info(
+                f'Depth calibration ready: average surface pressure = '
+                f'{self.surface_pressure_pa:.2f} Pa ({count} samples). '
+                'Real depth readings enabled (metres, positive down).'
+            )
+        gauge_pressure = pressure - self.surface_pressure_pa
         depth = gauge_pressure / (FRESH_WATER_DENSITY * GRAVITY)
 
         depth_msg = Float64()

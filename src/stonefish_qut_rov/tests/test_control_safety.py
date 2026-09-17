@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'ros_nodes/modular_
 import pytest
 import rclpy
 from geometry_msgs.msg import Twist
-from sensor_msgs.msg import Joy, Imu
+from sensor_msgs.msg import Joy, Imu, FluidPressure
 from std_msgs.msg import Float64
 
 from command_watchdog import Freshness
@@ -20,6 +20,48 @@ from sim_interface import SimInterface
 from real_interface import RealInterface
 from teleop_controller import GamepadTeleop
 import teleop_controller
+import real_interface
+
+
+def test_pressure_calibration_average_and_depth(monkeypatch):
+    now = [10.0]
+    monkeypatch.setattr(real_interface.time, 'monotonic', lambda: now[0])
+    node = RealInterface()
+    node.depth_pub = Mock()
+    try:
+        for i in range(30):
+            now[0] += .12
+            node.pressure_callback(FluidPressure(fluid_pressure=100000.0 + i))
+            if i < 29:
+                node.depth_pub.publish.assert_not_called()
+        assert node.surface_pressure_pa == pytest.approx(100014.5)
+        node.pressure_callback(FluidPressure(fluid_pressure=100014.5 + 998 * 9.81))
+        assert node.depth_pub.publish.call_args.args[0].data == pytest.approx(1.)
+        assert node.surface_pressure_pa == pytest.approx(100014.5)
+    finally:
+        node.destroy_node()
+
+
+def test_pressure_calibration_rejects_invalid_and_interrupted_samples(monkeypatch):
+    now = [10.0]
+    monkeypatch.setattr(real_interface.time, 'monotonic', lambda: now[0])
+    node = RealInterface()
+    node.depth_pub = Mock()
+    try:
+        sample = FluidPressure(fluid_pressure=100000.)
+        for _ in range(30):
+            node.pressure_callback(sample)
+        assert len(node._pressure_samples) == 1  # Burst cannot complete calibration.
+        now[0] += 2.
+        node.pressure_callback(sample)
+        assert len(node._pressure_samples) == 1
+        for invalid in (float('nan'), float('inf'), -1., 0.):
+            node.pressure_callback(FluidPressure(fluid_pressure=invalid))
+            assert not node._pressure_samples
+        assert node.surface_pressure_pa is None
+        node.depth_pub.publish.assert_not_called()
+    finally:
+        node.destroy_node()
 
 
 def test_camera_dpad_overrides_shortcuts_until_release(teleop):

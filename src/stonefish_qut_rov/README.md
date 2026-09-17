@@ -211,6 +211,18 @@ curl --fail --max-time 10 'http://192.168.144.108/get_config?chn=-1' | python3 -
 
 ### 7. Every session: start the physical ROV
 
+Keep the pressure sensor **in air** during startup. The real interface prints
+"Measuring Pa for depth calibration", averages 30 valid pressure samples over
+at least three seconds, then prints the average and enables depth readings.
+Until then it publishes no depth, so the launcher waits before enabling teleop.
+Missing/invalid pressure prevents calibration; an interruption longer than one
+second restarts sampling. The reference is kept in memory for this run, replacing
+the old fixed `REAL_SURFACE_PRESSURE_PA` reference for real depth calculation.
+Do not restart the stack underwater: it cannot distinguish air from a stationary
+submerged sensor and would incorrectly zero at that depth. No automatic re-zero
+occurs after calibration. Verify near-zero depth before immersion, then check
+against a known sensor depth with thrusters disconnected before using depth hold.
+
 Power/connect the system, connect the gamepad, keep controls neutral, then:
 
 ```bash

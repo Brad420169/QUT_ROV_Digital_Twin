@@ -29,10 +29,9 @@ REAL_INVERT_YAW_CMD   = False
 # 1. FIRST THINGS TO SET ON THE DAY
 # ─────────────────────────────────────────────────────────────────────
 
-# Bar30 reading with the ROV floating at the surface, in Pascals.
-# Depth is computed relative to this, so if it is wrong every depth
-# reading and the whole depth-hold loop is offset. Read it off the
-# plotter or QGC before the ROV goes in and set it here.
+# Legacy fixed reference, retained for compatibility with older tools.
+# RealInterface now averages pressure automatically on each startup instead.
+# Keep the pressure sensor in air until its calibration-ready message appears.
 REAL_SURFACE_PRESSURE_PA = 108910
 
 # Water density (kg/m^3). 1031 is seawater; a chlorinated pool is much
