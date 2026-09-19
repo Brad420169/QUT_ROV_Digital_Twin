@@ -57,9 +57,28 @@ def test_supervisor_stops_on_any_essential_exit(exited):
 
 def test_supervisor_timeout_names_missing_data():
     logger = Mock()
-    supervisor = SimpleNamespace(processes=[], teleop=None, received={},
+    supervisor = SimpleNamespace(mode="real", processes=[], teleop=None, received={},
         started=time.monotonic()-100, get_logger=lambda: logger, _shutdown_requested=False)
     StackSupervisor.monitor(supervisor)
     assert supervisor._shutdown_requested
     assert supervisor.exit_code == 1
     assert 'joy, depth, imu' in logger.error.call_args.args[0]
+
+
+@pytest.mark.parametrize("mode", ["sim", "real"])
+def test_startup_without_gamepad(mode):
+    now = time.monotonic()
+    supervisor = SimpleNamespace(
+        mode=mode, processes=[], teleop=None, received={"depth": now, "imu": now},
+        started=now-100, get_logger=lambda: Mock(), _shutdown_requested=False,
+        start=Mock(return_value=Mock()), maybe_print_controls=Mock(), exit_code=0,
+    )
+    StackSupervisor.monitor(supervisor)
+    if mode == "sim":
+        supervisor.start.assert_called_once()
+        assert supervisor.teleop is not None
+        assert not supervisor._shutdown_requested
+    else:
+        supervisor.start.assert_not_called()
+        assert supervisor._shutdown_requested
+        assert supervisor.exit_code == 1

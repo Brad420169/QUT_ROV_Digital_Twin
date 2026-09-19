@@ -68,7 +68,7 @@
 		<world_transform rpy="3.14 0 0" xyz="0 0.0 5"/>
 	</static>
 
-	<include file="$(find stonefish_qut_rov)/scenarios/main_rov.scn">
+	<include file="$(param rov_scenario)">
 
         <arg name="vehicle_name" value="qut_rov"/>
         <arg name="position" value="1.0 1.0 3.0"/>

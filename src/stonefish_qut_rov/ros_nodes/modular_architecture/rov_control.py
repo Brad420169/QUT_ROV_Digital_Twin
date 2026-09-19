@@ -55,7 +55,7 @@ def print_controls(rov_mode: str):
     print()
 
 class StackSupervisor(Node):
-    def __init__(self, mode):
+    def __init__(self, mode, rov_scenario="main_rov.scn"):
         super().__init__("rov_stack_supervisor")
         self.mode = mode
         self.processes = []
@@ -83,7 +83,8 @@ class StackSupervisor(Node):
             ])
         try:
             if mode == "sim":
-                self.start("Stonefish", ["ros2", "launch", PACKAGE, "launch_rov.py"])
+                self.start("Stonefish", ["ros2", "launch", PACKAGE, "launch_rov.py",
+                                         f"rov_scenario:={rov_scenario}"])
             else:
                 self.start("MAVROS", ["ros2", "launch", "mavros", "apm.launch",
                                       f"fcu_url:={REAL_FCU_URL}"], MAVROS_LOG_FILE)
@@ -93,7 +94,9 @@ class StackSupervisor(Node):
             interface = "sim_interface.py" if mode == "sim" else REAL_INTERFACE_EXECUTABLE
             self.start("interface", ["ros2", "run", PACKAGE, interface])
             self.timer = self.create_timer(0.1, self.monitor)
-            self.get_logger().info("Waiting for joystick, depth and IMU data before starting teleop...")
+            self.get_logger().info(
+                "Waiting for " + ("joystick, " if mode == "real" else "")
+                + "depth and IMU data before starting teleop...")
         except BaseException:
             self.stop()
             self.destroy_node()
@@ -149,8 +152,10 @@ class StackSupervisor(Node):
             self.maybe_print_controls()
             return
         now = time.monotonic()
-        missing = [name for name, timeout in (("joy", JOY_TIMEOUT_S), ("depth", SENSOR_TIMEOUT_S),
-                                              ("imu", SENSOR_TIMEOUT_S))
+        required = [("depth", SENSOR_TIMEOUT_S), ("imu", SENSOR_TIMEOUT_S)]
+        if self.mode == "real":
+            required.insert(0, ("joy", JOY_TIMEOUT_S))
+        missing = [name for name, timeout in required
                    if now - self.received.get(name, -math.inf) > timeout]
         if not missing:
             self.teleop = self.start("teleop", ["ros2", "run", PACKAGE, "teleop_controller.py",
@@ -158,7 +163,12 @@ class StackSupervisor(Node):
             self.maybe_print_controls()
             self.get_logger().info("Stack started. Release controls to neutral to enable manual control.")
         elif now - self.started > STARTUP_TIMEOUT_S:
-            self.get_logger().error(f"Startup timed out waiting for: {', '.join(missing)}")
+            message = f"Startup timed out waiting for: {', '.join(missing)}"
+            if "joy" in missing:
+                message += (
+                    ". No gamepad input received. Connect or power on the controller, "
+                    "check that ROS joy_node detects it, then restart the launcher.")
+            self.get_logger().error(message)
             self.exit_code = 1
             self._shutdown_requested = True
 
@@ -173,6 +183,9 @@ class StackSupervisor(Node):
 def main():
     parser = argparse.ArgumentParser(description="QUT ROV control launcher")
     parser.add_argument("--mode", choices=["sim", "real", "s", "r"])
+    parser.add_argument("--rov-scenario", default="main_rov.scn",
+                        choices=["main_rov.scn", "main_rov_tri_bouyancy.scn", "main_rov_lil_tri_block.scn", "main_rov_square_block.scn"],
+                        help="ROV model to load in simulation")
     args = parser.parse_args()
     mode = args.mode
     while mode is None:
@@ -183,7 +196,7 @@ def main():
     holder = []
 
     def create():
-        node = StackSupervisor(mode)
+        node = StackSupervisor(mode, args.rov_scenario)
         holder.append(node)
         return node
 

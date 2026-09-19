@@ -3,7 +3,7 @@
 
     <looks>
         <!-- QUT ROV looks -->
-        <look name="rov_body" gray="1.0" roughness="0.4" metalness="0.2" texture="cad_model_data/rov_models/visual_mesh_colours.png"/>
+        <look name="rov_body" gray="1.0" roughness="0.4" metalness="0.2"/>
         <look name="foam" rgb="0.15 0.15 0.15" roughness="0.80"/>
         <look name="thruster" rgb="0.0 0.0 0.0" roughness="0.3" metalness="0.5"/>
         <look name="camera" rgb="0.10 0.10 0.10" roughness="0.40"/>
@@ -14,30 +14,32 @@
 
         <base_link name="base_link" type="model" physics="submerged">
 
-        <!-- Main hull -->
+        <!-- OBJ units are centimetres. The physical mesh has (-x, y, -z)
+             baked in: +X forward, +Y right, +Z down. Keep its origin at
+             identity: Stonefish spawns this robot in the physical mesh frame.
+             The original visual mesh receives the equivalent rotation here. -->
             <physical>
-                <mesh filename="cad_model_data/rov_models/physical_mesh.obj" scale="1.0"/>
-                <origin rpy="0.0 0.0 0.0" xyz="0 0.0 0.0"/>
+                <mesh filename="cad_model_data/rov_models/square_block_rov_phy_ned.obj" scale="0.01"/>
+                <origin rpy="0 0 0" xyz="0 0 0"/>
             </physical>
 
             <visual>
-                <mesh filename="cad_model_data/rov_models/visual_mesh.obj" scale="1.0"/>
-                <origin rpy="0 1.5708 -1.5708" xyz="-0.18 0 -0.01"/>
+                <mesh filename="cad_model_data/rov_models/square_block_rov_vis.obj" scale="0.01"/>
+                <origin rpy="0 3.141592653589793 0" xyz="0 0 0"/>
             </visual>
 
             <material name="HullMat"/>
             <look name="rov_body"/>
-            <mass value="4.5"/>
+            <mass value="4.2"/>
             <inertia xyz="0.03 0.536 0.0535"/>
-            <cg xyz="0.00 0.0 0.0" rpy="0.0 0.0 0.0"/>
+            <cg xyz="-0.05 -0.02 -0.01" rpy="0.0 0.0 0.0"/>
         </base_link>
 
 
         <!-- Thruster TL -->
         <actuator name="TL" type="thruster">
             <link name="base_link"/>
-            <!-- <origin xyz="0.0026 -0.145 0.00914" rpy="0 -1.5708 0"/> -->
-            <origin xyz="0.0 -0.145 0.0" rpy="0 -1.5708 0"/>
+            <origin xyz="0.001112 -0.165535 -0.031644" rpy="0 -1.5708 0"/>
             <specs max_setpoint="1200.0" inverted_setpoint="false" normalized_setpoint="false"/>
             <rotor_dynamics type="zero_order"/>
             <thrust_model type="fluid_dynamics">
@@ -55,8 +57,7 @@
         <!-- Thruster TR -->
         <actuator name="TR" type="thruster">
             <link name="base_link"/>
-            <!-- <origin xyz="0.0026 0.145 0.00914" rpy="0 -1.5708 0"/> -->
-            <origin xyz="0.0 0.145 0.0" rpy="0 -1.5708 0"/>
+            <origin xyz="0.000774 0.124186 -0.031597" rpy="0 -1.5708 0"/>
             <specs max_setpoint="1200.0" inverted_setpoint="true" normalized_setpoint="false"/>
             <rotor_dynamics type="zero_order"/>
             <thrust_model type="fluid_dynamics">
@@ -74,8 +75,7 @@
         <!-- Thruster BL -->
         <actuator name="BL" type="thruster">
             <link name="base_link"/>
-            <!-- <origin xyz="-0.09735 -0.140 0.0066" rpy="0.0 0.0 0.0"/> -->
-            <origin xyz="-0.09735 -0.140 -0.007" rpy="0.0 0.0 0.0"/>
+            <origin xyz="-0.095228 -0.160535 -0.043455" rpy="0.0 0.0 0.0"/>
             <specs max_setpoint="1200.0" inverted_setpoint="false" normalized_setpoint="false"/>
             <rotor_dynamics type="zero_order"/>
             <thrust_model type="fluid_dynamics">
@@ -93,8 +93,7 @@
         <!-- Thruster BR -->
         <actuator name="BR" type="thruster">
             <link name="base_link"/>
-            <!-- <origin xyz="-0.09735 0.140 0.0066" rpy="0.0 0.0 0.0"/> -->
-            <origin xyz="-0.09735 0.140 -0.007" rpy="0.0 0.0 0.0"/>
+            <origin xyz="-0.094426 0.118998 -0.043455" rpy="0.0 0.0 0.0"/>
             <specs max_setpoint="1200.0" inverted_setpoint="true" normalized_setpoint="false"/>
             <rotor_dynamics type="zero_order"/>
             <thrust_model type="fluid_dynamics">

@@ -45,7 +45,7 @@ def find_optional_venv():
     return None
 
 
-def build_shell_command(mode: str) -> str:
+def build_shell_command(mode: str, rov_scenario: str = "main_rov.scn") -> str:
     parts = [
         f"source {shlex.quote(ROS_SETUP)}",
         f"source {shlex.quote(WORKSPACE_SETUP)}",
@@ -55,17 +55,19 @@ def build_shell_command(mode: str) -> str:
     if venv:
         parts.append(f"source {shlex.quote(venv)}")
 
+    scenario_arg = f" --rov-scenario {shlex.quote(rov_scenario)}" if mode == "sim" else ""
     parts.append(
         f"ros2 run {shlex.quote(PACKAGE)} "
-        f"{shlex.quote(EXECUTABLE)} --mode {shlex.quote(mode)}"
+        f"{shlex.quote(EXECUTABLE)} --mode {shlex.quote(mode)}{scenario_arg}"
     )
 
-    # Keep the terminal visible after the ROS stack exits.
-    parts.append('echo')
-    parts.append('echo "ROV control process ended. Press Enter to close this terminal."')
-    parts.append('read')
-
-    return " && ".join(parts)
+    # Setup failures and nonzero stack exits must also leave diagnostics visible.
+    return (
+        " && ".join(parts)
+        + '; rov_exit_code=$?; printf "\\nROV control process ended (exit code %s). '
+          'Press Enter to close this terminal.\\n" "$rov_exit_code"; '
+          'read -r; exit "$rov_exit_code"'
+    )
 
 
 def open_terminal(command: str):
@@ -106,7 +108,7 @@ def open_terminal(command: str):
     )
 
 
-def launch_mode(mode: str, root):
+def launch_mode(mode: str, root, rov_scenario: str = "main_rov.scn"):
     if not os.path.isfile(ROS_SETUP):
         messagebox.showerror(
             "ROS 2 not found",
@@ -133,7 +135,7 @@ def launch_mode(mode: str, root):
         if not proceed:
             return
 
-    command = build_shell_command(mode)
+    command = build_shell_command(mode, rov_scenario)
     open_terminal(command)
     # Close the launcher GUI after starting the selected ROV mode
     root.destroy()
@@ -142,7 +144,7 @@ def launch_mode(mode: str, root):
 def main():
     root = tk.Tk()
     root.title("QUT ROV Control")
-    root.geometry("520x330")
+    root.geometry("560x500")
     root.resizable(False, False)
 
     title = tk.Label(
@@ -159,13 +161,22 @@ def main():
     )
     subtitle.pack(pady=(0, 25))
 
+    rov_scenario = tk.StringVar(root, value="main_rov.scn")
+    scenario_frame = tk.LabelFrame(root, text="Simulation ROV scenario", padx=12, pady=6)
+    scenario_frame.pack(fill="x", padx=45, pady=(0, 8))
+    for filename in ("main_rov.scn", "main_rov_tri_bouyancy.scn", "main_rov_lil_tri_block.scn", "main_rov_square_block.scn"):
+        tk.Radiobutton(
+            scenario_frame, text=filename, variable=rov_scenario,
+            value=filename, anchor="w",
+        ).pack(fill="x")
+
     sim_button = tk.Button(
         root,
         text="Stonefish Simulation",
         font=("Arial", 16, "bold"),
         width=27,
         height=2,
-        command=lambda: launch_mode("sim", root),
+        command=lambda: launch_mode("sim", root, rov_scenario.get()),
     )
     sim_button.pack(pady=8)
 
