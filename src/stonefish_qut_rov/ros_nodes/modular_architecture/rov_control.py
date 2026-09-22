@@ -184,7 +184,7 @@ def main():
     parser = argparse.ArgumentParser(description="QUT ROV control launcher")
     parser.add_argument("--mode", choices=["sim", "real", "s", "r"])
     parser.add_argument("--rov-scenario", default="main_rov.scn",
-                        choices=["main_rov.scn", "main_rov_tri_bouyancy.scn", "main_rov_lil_tri_block.scn", "main_rov_square_block.scn"],
+                        choices=["rov_v1.scn", "rov_v2.scn", "rov_v3.scn", "rov_v4.scn"],
                         help="ROV model to load in simulation")
     args = parser.parse_args()
     mode = args.mode

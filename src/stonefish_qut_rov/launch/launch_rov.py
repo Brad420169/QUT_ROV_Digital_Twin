@@ -14,8 +14,8 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument("environment", default_value="pool_environment",
                               choices=["ocean_environment", "pool_environment"]),
-        DeclareLaunchArgument("rov_scenario", default_value="main_rov.scn",
-                              choices=["main_rov.scn", "main_rov_tri_bouyancy.scn", "main_rov_lil_tri_block.scn", "main_rov_square_block.scn"]),
+        DeclareLaunchArgument("rov_scenario", default_value="rov_v2.scn",
+                              choices=["rov_v1.scn", "rov_v2.scn", "rov_v3.scn", "rov_v4.scn"]),
         GroupAction([
             SetParameter(name="rov_scenario", value=PathJoinSubstitution([
                 package, "scenarios", LaunchConfiguration("rov_scenario")])),

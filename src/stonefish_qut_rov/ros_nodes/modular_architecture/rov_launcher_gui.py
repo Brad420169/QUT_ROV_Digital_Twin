@@ -164,7 +164,7 @@ def main():
     rov_scenario = tk.StringVar(root, value="main_rov.scn")
     scenario_frame = tk.LabelFrame(root, text="Simulation ROV scenario", padx=12, pady=6)
     scenario_frame.pack(fill="x", padx=45, pady=(0, 8))
-    for filename in ("main_rov.scn", "main_rov_tri_bouyancy.scn", "main_rov_lil_tri_block.scn", "main_rov_square_block.scn"):
+    for filename in ("rov_v1.scn", "rov_v2.scn", "rov_v3.scn", "rov_v4.scn"):
         tk.Radiobutton(
             scenario_frame, text=filename, variable=rov_scenario,
             value=filename, anchor="w",

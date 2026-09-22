@@ -1,0 +1,159 @@
+<?xml version="1.0"?>
+<scenario>
+
+    <looks>
+        <!-- QUT ROV looks -->
+        <look name="rov_body" gray="1.0" roughness="0.4" metalness="0.2" texture="cad_model_data/rov_models/lil_tri_block_mesh_colours.png"/>
+        <look name="foam"  rgb="0.15 0.15 0.15" roughness="0.80"/>
+        <look name="thruster" rgb="0.0 0.0 0.0" roughness="0.3" metalness="0.5"/>
+        <look name="camera" rgb="0.10 0.10 0.10" roughness="0.40"/>
+        <look name="default" rgb="1.0 1.0 1.0" roughness="1.0" metalness="0.0"/>
+            </looks>
+
+    <robot name="$(arg vehicle_name)" fixed="false" self_collisions="false">
+
+        <base_link name="base_link" type="model" physics="submerged">
+
+        <!-- Approved simplified physical mesh: flat covers and rear block underside.
+             OBJ units are centimetres. The physical mesh has (-x, y, -z)
+             baked in: +X forward, +Y right, +Z down. Keep its origin at
+             identity: Stonefish spawns this robot in the physical mesh frame.
+             The original visual mesh receives the equivalent rotation here. -->
+            <physical>
+                <mesh filename="cad_model_data/rov_models/phyiscal_meshes/lil_tri_block_rov_phy_ned.obj" scale="0.01"/>
+                <origin rpy="0 0 0" xyz="0 0 0"/>
+            </physical>
+
+            <visual>
+                <mesh filename="cad_model_data/rov_models/visual_meshes/lil_tri_block_rov_vis.obj" scale="0.01"/>
+                <origin rpy="0 3.141592653589793 0" xyz="0 0 0"/>
+            </visual>
+
+            <material name="HullMat"/>
+            <look name="rov_body"/>
+            <mass value="4.6"/>
+            <cg xyz="-0.06 -0.02 -0.035" rpy="0.0 0.0 0.0"/> 
+        </base_link>
+
+
+        <actuator name="TL" type="thruster">
+            <link name="base_link"/>
+            <!-- <origin xyz="0.0 -0.16 -0.03" rpy="0 -1.5708 0"/> -->
+            <origin xyz="-0.05 -0.16 -0.03" rpy="0 -1.5708 0"/>
+            <specs max_setpoint="1200.0" inverted_setpoint="false" normalized_setpoint="false"/>
+            <rotor_dynamics type="zero_order"/>
+            <thrust_model type="fluid_dynamics">
+                <rotor_constant value="1"/>
+                <thrust_coeff forward="0.043" reverse="0.043"/>
+                <torque_coeff value="0.00001"/>
+            </thrust_model>
+            <propeller diameter="0.077" right="false">
+                <mesh filename="cad_model_data/thrusters/ccw_thruster.obj" scale="0.001"/>
+                <material name="Neutral"/>
+                <look name="thruster"/>
+            </propeller>
+        </actuator>
+
+        <!-- Thruster TR -->
+        <actuator name="TR" type="thruster">
+            <link name="base_link"/>
+            <!-- <origin xyz="0.0 0.12 -0.03" rpy="0 -1.5708 0"/> -->
+            <origin xyz="-0.05 0.12 -0.03" rpy="0 -1.5708 0"/>
+            <specs max_setpoint="1200.0" inverted_setpoint="true" normalized_setpoint="false"/>
+            <rotor_dynamics type="zero_order"/>
+            <thrust_model type="fluid_dynamics">
+                <rotor_constant value="1"/>
+                <thrust_coeff forward="0.043" reverse="0.043"/>
+                <torque_coeff value="0.00001"/>
+            </thrust_model>
+            <propeller diameter="0.077" right="true">
+                <mesh filename="cad_model_data/thrusters/cw_thruster.obj" scale="0.001"/>
+                <material name="Neutral"/>
+                <look name="thruster"/>
+            </propeller>
+        </actuator>
+
+        <!-- Thruster BL -->
+        <actuator name="BL" type="thruster">
+            <link name="base_link"/>
+            <!-- <origin xyz="-0.09 -0.16 -0.03" rpy="0.0 0.0 0.0"/> -->
+            <origin xyz="-0.14 -0.16 -0.06" rpy="0.0 0.0 0.0"/>
+            <specs max_setpoint="1200.0" inverted_setpoint="false" normalized_setpoint="false"/>
+            <rotor_dynamics type="zero_order"/>
+            <thrust_model type="fluid_dynamics">
+                <rotor_constant value="1"/>
+                <thrust_coeff forward="0.043" reverse="0.043"/>
+                <torque_coeff value="0.00001"/>
+            </thrust_model>
+            <propeller diameter="0.077" right="true">
+                <mesh filename="cad_model_data/thrusters/cw_thruster.obj" scale="0.001"/>
+                <material name="Neutral"/>
+                <look name="thruster"/>
+            </propeller>
+        </actuator>
+
+        <!-- Thruster BR -->
+        <actuator name="BR" type="thruster">
+            <link name="base_link"/>
+            <!-- <origin xyz="-0.09 0.12 -0.03" rpy="0.0 0.0 0.0"/> -->
+            <origin xyz="-0.14 0.12 -0.06" rpy="0.0 0.0 0.0"/>
+            <specs max_setpoint="1200.0" inverted_setpoint="true" normalized_setpoint="false"/>
+            <rotor_dynamics type="zero_order"/>
+            <thrust_model type="fluid_dynamics">
+                <rotor_constant value="1"/>
+                <thrust_coeff forward="0.043" reverse="0.043"/>
+                <torque_coeff value="0.00001"/>
+            </thrust_model>
+            <propeller diameter="0.077" right="false">
+                <mesh filename="cad_model_data/thrusters/ccw_thruster.obj" scale="0.001"/>
+                <material name="Neutral"/>
+                <look name="thruster"/>
+            </propeller>
+        </actuator>
+
+
+        <sensor name="Cam" rate="60.0" type="camera">
+            <specs resolution_x="480" resolution_y="360" horizontal_fov="75.0"/>
+            <!-- <origin xyz="0.14816 -0.00046 -0.00106" rpy="1.5708 0 1.5708"/> -->
+            <origin xyz="0.19 -0.00046 -0.00106" rpy="1.5708 0 1.5708"/>
+            <link name="base_link"/>
+            <ros_publisher topic="/$(arg vehicle_name)/left"/>
+        </sensor>
+
+        <!-- GPS reports no fix while submerged; motion HUD uses simulation truth. -->
+        <sensor name="GPS" rate="10.0" type="gps">
+            <noise ned_position="0.0"/>
+            <history samples="1"/>
+            <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0"/>
+            <link name="base_link"/>
+            <ros_publisher topic="/$(arg vehicle_name)/gps"/>
+        </sensor>
+
+        <sensor name="IMU" rate="30.0" type="imu">
+            <noise angle="0.0 0.0 0.0" angular_velocity="0.0" yaw_drift="0.0" linear_acceleration="0.0"/>
+            <history samples="1"/>
+            <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0"/>
+            <link name="base_link"/>
+            <ros_publisher imu="IMU" topic="/$(arg vehicle_name)/imu"/>
+        </sensor>
+
+        <sensor name="Pressure" rate="30.0" type="pressure">
+            <range pressure="200000.0"/>
+            <noise pressure="0.5"/>
+            <history samples="1"/>
+            <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0"/>
+            <link name="base_link"/>
+            <ros_publisher pressure="Pressure" topic="/$(arg vehicle_name)/pressure"/>
+        </sensor>
+
+                <!-- Transform + ROS -->
+        <world_transform xyz="$(arg position)" rpy="$(arg orientation)"/>
+        <ros_subscriber thrusters="/$(arg vehicle_name)/setpoint/thrusters"/>
+
+    </robot>
+
+
+</scenario>
+
+
+
