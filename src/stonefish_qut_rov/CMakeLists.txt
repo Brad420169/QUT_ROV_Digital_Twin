@@ -18,15 +18,15 @@ install(
 # EXECUTABLE ROS 2 NODES
 install(
   PROGRAMS
-    ros_nodes/modular_architecture/rov_launcher_gui.py
-    ros_nodes/modular_architecture/rov_control.py
-    ros_nodes/modular_architecture/teleop_controller.py
-    ros_nodes/modular_architecture/sim_interface.py
-    ros_nodes/modular_architecture/fish_detector_follower.py
-    ros_nodes/modular_architecture/real_interface.py
-    ros_nodes/modular_architecture/imu_depth_plotter.py
-    ros_nodes/modular_architecture/pwm_monitor.py
-    ros_nodes/modular_architecture/camera_viewer_rtsp.py
+    ros_nodes/common/rov_launcher_gui.py
+    ros_nodes/common/rov_control.py
+    ros_nodes/common/teleop_controller.py
+    ros_nodes/sim/sim_interface.py
+    ros_nodes/sim/fish_detector_follower.py
+    ros_nodes/real/real_interface.py
+    ros_nodes/common/imu_depth_plotter.py
+    ros_nodes/real/pwm_monitor.py
+    ros_nodes/real/camera_viewer_rtsp.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -34,24 +34,28 @@ install(
 # PYTHON HELPER MODULES
 install(
   FILES
-    ros_nodes/modular_architecture/command_watchdog.py
-    ros_nodes/modular_architecture/node_lifecycle.py
-    ros_nodes/modular_architecture/process_utils.py
-    ros_nodes/modular_architecture/viewer_manager.py
-    ros_nodes/modular_architecture/gimbal_fpv.py
-    ros_nodes/modular_architecture/gimbal_motor.py
-    ros_nodes/modular_architecture/gimbal_motor.c
-    ros_nodes/modular_architecture/camera_thermal.py
-    ros_nodes/modular_architecture/tennis_ball_tracker.py
-    ros_nodes/modular_architecture/battery_status.py
-    ros_nodes/modular_architecture/rov_config.py
-    ros_nodes/modular_architecture/control_utils.py
-    ros_nodes/modular_architecture/thruster_mixer.py
-    ros_nodes/modular_architecture/pid_controller.py
-    ros_nodes/modular_architecture/sim_to_real_scales.py
+    ros_nodes/common/command_watchdog.py
+    ros_nodes/common/node_lifecycle.py
+    ros_nodes/common/process_utils.py
+    ros_nodes/common/viewer_manager.py
+    ros_nodes/real/gimbal_fpv.py
+    ros_nodes/real/gimbal_motor.py
+    ros_nodes/real/gimbal_motor.c
+    ros_nodes/real/camera_thermal.py
+    ros_nodes/real/tennis_ball_tracker.py
+    ros_nodes/real/battery_status.py
+    ros_nodes/common/rov_config.py
+    ros_nodes/common/control_utils.py
+    ros_nodes/common/vehicle_command.py
+    ros_nodes/sim/thruster_mixer.py
+    ros_nodes/common/pid_controller.py
+    ros_nodes/common/sim_to_real_scales.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
+
+# Keep sibling imports available when executables are symlinked to source folders.
+ament_environment_hooks("${CMAKE_CURRENT_SOURCE_DIR}/env-hooks/ros_nodes.dsv")
 
 if(BUILD_TESTING)
   find_package(ament_cmake_pytest REQUIRED)

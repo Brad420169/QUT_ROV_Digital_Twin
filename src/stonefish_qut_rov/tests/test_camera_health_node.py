@@ -7,7 +7,6 @@ import time
 from types import SimpleNamespace
 os.environ.setdefault('ROS_DOMAIN_ID', '213')
 os.environ.setdefault('ROS_LOG_DIR', '/tmp/rov-test-logs')
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'ros_nodes/modular_architecture'))
 import rclpy
 import camera_viewer_rtsp as viewer
 

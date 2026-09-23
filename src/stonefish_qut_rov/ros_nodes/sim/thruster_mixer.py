@@ -11,21 +11,8 @@ Do not manually invert TR or BR here because the Stonefish XML already
 uses inverted_setpoint="true" for those actuators.
 """
 
-from dataclasses import dataclass
-
 from control_utils import clamp
-
-
-@dataclass
-class VehicleCommand:
-    surge: float = 0.0
-    heave: float = 0.0
-    yaw: float = 0.0
-
-    def zero(self):
-        self.surge = 0.0
-        self.heave = 0.0
-        self.yaw = 0.0
+from vehicle_command import VehicleCommand
 
 
 def mix_normalised(command: VehicleCommand) -> list[float]:

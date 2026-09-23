@@ -126,7 +126,9 @@ class StackSupervisor(Node):
         self.received[name] = time.monotonic() if msg.data else -math.inf
 
     def fcu_ready(self, msg):
-        self.fcu_ready_at = time.monotonic() if msg.connected and msg.mode == 'MANUAL' else -math.inf
+        now = time.monotonic()
+        self.received['fcu'] = now if msg.connected else -math.inf
+        self.fcu_ready_at = now if msg.connected and msg.mode == 'MANUAL' else -math.inf
 
     def maybe_print_controls(self):
         if self.controls_printed:
@@ -163,6 +165,9 @@ class StackSupervisor(Node):
             self.maybe_print_controls()
             self.get_logger().info("Stack started. Release controls to neutral to enable manual control.")
         elif now - self.started > STARTUP_TIMEOUT_S:
+            if self.mode == 'real' and now - self.received.get('fcu', -math.inf) >= 3.0:
+                self.get_logger().warning(
+                    "Failed to connect to the Pixhawk, check your ethernet connection")
             message = f"Startup timed out waiting for: {', '.join(missing)}"
             if "joy" in missing:
                 message += (

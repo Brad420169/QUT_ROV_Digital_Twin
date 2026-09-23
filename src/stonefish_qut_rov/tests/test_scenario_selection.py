@@ -10,7 +10,6 @@ from launch.actions import GroupAction
 from launch_ros.actions import SetParameter
 
 PACKAGE = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(PACKAGE / "ros_nodes/modular_architecture"))
 import rov_launcher_gui as gui
 
 

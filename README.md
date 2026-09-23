@@ -47,7 +47,30 @@ https://github.com/user-attachments/assets/ffbe256a-3c4d-401d-acdf-2d69c06081ee
 
 ### Nodes
 
-The active Python code is in `src/stonefish_qut_rov/ros_nodes/modular_architecture/`.
+The active Python code is in `src/stonefish_qut_rov/ros_nodes/`:
+
+- `common/`: shared launchers, teleop, plotting, configuration, and helpers.
+- `real/`: MAVROS interface, PWM monitoring, RTSP camera, gimbal, and ball tracking.
+- `sim/`: Stonefish interface and fish detection/following.
+
+`common/vehicle_command.py` defines the `VehicleCommand` type used by both
+interfaces. Thruster allocation lives in `sim/thruster_mixer.py`; battery reporting
+and physical-camera thermal safety live in `real/battery_status.py` and
+`real/camera_thermal.py`. The shared teleop controller imports these real-mode
+helpers for hardware operation. Shared configuration, including
+`sim_to_real_scales.py`, remains in `common/`.
+
+The build installs the nodes and helpers together, preserving existing
+`ros2 run stonefish_qut_rov <node>.py` commands. After changing the source layout,
+rebuild and source the workspace (also required for direct source execution):
+
+```bash
+colcon build --symlink-install --packages-select stonefish_qut_rov
+source install/setup.bash
+```
+
+The GUI shell launcher is now `ros_nodes/common/launch_rov_gui.sh` within the
+package.
 
 | Node / module | Role |
 | --- | --- |

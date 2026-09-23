@@ -34,7 +34,8 @@ from rov_config import (
 )
 from command_watchdog import Freshness
 from node_lifecycle import run_node
-from thruster_mixer import VehicleCommand, mix_to_setpoints
+from thruster_mixer import mix_to_setpoints
+from vehicle_command import VehicleCommand
 
 
 class SimInterface(Node):

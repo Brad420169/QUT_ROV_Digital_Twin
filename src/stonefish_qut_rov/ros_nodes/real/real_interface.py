@@ -80,7 +80,7 @@ from rov_config import (
 from command_watchdog import Freshness
 from node_lifecycle import run_node
 from control_utils import clamp
-from thruster_mixer import VehicleCommand
+from vehicle_command import VehicleCommand
 
 # OverrideRCIn expects 18 channels on ROS 2 / MAVROS 2.x
 RC_CHANNEL_COUNT = 18

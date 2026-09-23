@@ -7,7 +7,6 @@ from unittest.mock import Mock
 
 os.environ['ROS_DOMAIN_ID'] = '213'
 os.environ.setdefault('ROS_LOG_DIR', '/tmp/rov-test-logs')
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'ros_nodes/modular_architecture'))
 
 import pytest
 import rclpy
@@ -277,7 +276,7 @@ def follower_class(monkeypatch):
     monkeypatch.setitem(sys.modules, 'ultralytics', SimpleNamespace(YOLO=Mock()))
     monkeypatch.setitem(sys.modules, 'ultralytics.utils', SimpleNamespace(LOGGER=Mock()))
     spec = importlib.util.spec_from_file_location('follower_under_test',
-        Path(__file__).resolve().parents[1] / 'ros_nodes/modular_architecture/fish_detector_follower.py')
+        Path(__file__).resolve().parents[1] / 'ros_nodes/sim/fish_detector_follower.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

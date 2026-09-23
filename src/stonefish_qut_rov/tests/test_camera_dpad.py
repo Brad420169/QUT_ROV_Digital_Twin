@@ -4,7 +4,6 @@ import sys
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'ros_nodes/modular_architecture'))
 from camera_viewer_rtsp import ViewerNode
 
 

@@ -6,7 +6,6 @@ import sys
 import unittest
 import time
 from unittest.mock import patch
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'ros_nodes/modular_architecture'))
 from gimbal_fpv import Connection, make_packet, FPVHold
 from gimbal_motor import MotorControl, CONTROLLER_SHA256
 

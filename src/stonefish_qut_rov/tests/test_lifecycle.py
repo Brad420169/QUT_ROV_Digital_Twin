@@ -9,7 +9,6 @@ from unittest.mock import Mock
 
 os.environ['ROS_DOMAIN_ID'] = '213'
 os.environ.setdefault('ROS_LOG_DIR', '/tmp/rov-test-logs')
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'ros_nodes/modular_architecture'))
 
 import pytest
 import rclpy

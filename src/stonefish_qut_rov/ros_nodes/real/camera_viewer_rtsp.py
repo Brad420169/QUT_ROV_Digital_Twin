@@ -101,7 +101,10 @@ class FrameGrabber:
                     pass
 
                 if not cap.isOpened():
-                    print("  failed, retrying...", flush=True)
+                    print(
+                        "WARNING: Failed to connect to the camera. Check that your Ethernet "
+                        "connection is plugged in and configured for the camera's network. Retrying...",
+                        flush=True)
                     time.sleep(RECONNECT_DELAY)
                     continue
 
@@ -110,7 +113,9 @@ class FrameGrabber:
             ok, frame = cap.read()
 
             if not ok:
-                print("  stream dropped, reconnecting...", flush=True)
+                print(
+                    "WARNING: Camera stream lost. Check your Ethernet connection "
+                    "and network configuration. Reconnecting...", flush=True)
                 with self.lock:
                     self.frame = None
                     self.frame_times.clear()
