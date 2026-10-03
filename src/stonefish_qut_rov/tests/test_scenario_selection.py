@@ -13,14 +13,14 @@ PACKAGE = Path(__file__).resolve().parents[1]
 import rov_launcher_gui as gui
 
 
-@pytest.mark.parametrize("scenario", ["main_rov.scn", "main_rov_tri_bouyancy.scn", "main_rov_lil_tri_block.scn", "main_rov_square_block.scn"])
+@pytest.mark.parametrize("scenario", ["rov_v1.scn", "rov_v2.scn", "rov_v3.scn", "rov_v4.scn", "real_rov.scn"])
 def test_gui_passes_selected_scenario_only_to_sim(monkeypatch, scenario):
     monkeypatch.setattr(gui, "find_optional_venv", lambda: None)
     assert f"--mode sim --rov-scenario {scenario}" in gui.build_shell_command("sim", scenario)
     assert "--rov-scenario" not in gui.build_shell_command("real", scenario)
 
 
-@pytest.mark.parametrize("scenario", ["main_rov.scn", "main_rov_tri_bouyancy.scn", "main_rov_lil_tri_block.scn", "main_rov_square_block.scn"])
+@pytest.mark.parametrize("scenario", ["rov_v1.scn", "rov_v2.scn", "rov_v3.scn", "rov_v4.scn", "real_rov.scn"])
 @pytest.mark.parametrize("environment", ["ocean_environment", "pool_environment"])
 def test_launch_parameter_resolves_rov_include(scenario, environment):
     spec = importlib.util.spec_from_file_location("rov_launch", PACKAGE / "launch/launch_rov.py")

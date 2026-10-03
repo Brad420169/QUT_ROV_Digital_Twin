@@ -55,7 +55,7 @@ def print_controls(rov_mode: str):
     print()
 
 class StackSupervisor(Node):
-    def __init__(self, mode, rov_scenario="main_rov.scn"):
+    def __init__(self, mode, rov_scenario="real_rov.scn"):
         super().__init__("rov_stack_supervisor")
         self.mode = mode
         self.processes = []
@@ -188,8 +188,8 @@ class StackSupervisor(Node):
 def main():
     parser = argparse.ArgumentParser(description="QUT ROV control launcher")
     parser.add_argument("--mode", choices=["sim", "real", "s", "r"])
-    parser.add_argument("--rov-scenario", default="main_rov.scn",
-                        choices=["rov_v1.scn", "rov_v2.scn", "rov_v3.scn", "rov_v4.scn"],
+    parser.add_argument("--rov-scenario", default="real_rov.scn",
+                        choices=["rov_v1.scn", "rov_v2.scn", "rov_v3.scn", "rov_v4.scn", "real_rov.scn"],
                         help="ROV model to load in simulation")
     args = parser.parse_args()
     mode = args.mode

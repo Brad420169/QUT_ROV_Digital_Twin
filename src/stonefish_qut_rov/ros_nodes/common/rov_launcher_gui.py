@@ -45,7 +45,7 @@ def find_optional_venv():
     return None
 
 
-def build_shell_command(mode: str, rov_scenario: str = "main_rov.scn") -> str:
+def build_shell_command(mode: str, rov_scenario: str = "real_rov.scn") -> str:
     parts = [
         f"source {shlex.quote(ROS_SETUP)}",
         f"source {shlex.quote(WORKSPACE_SETUP)}",
@@ -108,7 +108,7 @@ def open_terminal(command: str):
     )
 
 
-def launch_mode(mode: str, root, rov_scenario: str = "main_rov.scn"):
+def launch_mode(mode: str, root, rov_scenario: str = "real_rov.scn"):
     if not os.path.isfile(ROS_SETUP):
         messagebox.showerror(
             "ROS 2 not found",
@@ -141,62 +141,92 @@ def launch_mode(mode: str, root, rov_scenario: str = "main_rov.scn"):
     root.destroy()
 
 
+def build_window(root):
+    """Build the launcher without starting a vehicle or entering the event loop."""
+    from tkinter import ttk
+
+    bg, panel, border = "#071d2b", "#102e40", "#24495d"
+    text, muted, accent = "#edf8fc", "#adc8d6", "#38d6cb"
+    root.title("QUT ROV • Mission launcher")
+    root.geometry("700x610")
+    root.minsize(680, 600)
+    root.configure(bg=bg)
+    root.option_add("*Font", ("DejaVu Sans", 10))
+    style = ttk.Style(root)
+    style.theme_use("clam")
+    style.configure("Marine.TCombobox", fieldbackground=bg, background=border,
+                    foreground=text, arrowcolor=accent, padding=8)
+    style.map("Marine.TCombobox", fieldbackground=[("readonly", bg)],
+              foreground=[("readonly", text)], selectbackground=[("readonly", bg)],
+              selectforeground=[("readonly", text)])
+    root.option_add("*TCombobox*Listbox.background", panel)
+    root.option_add("*TCombobox*Listbox.foreground", text)
+    root.option_add("*TCombobox*Listbox.selectBackground", "#166a80")
+
+    body = tk.Frame(root, bg=bg)
+    body.pack(fill="both", expand=True, padx=28, pady=24)
+    tk.Label(body, text="QUT  /  UNDERWATER ROBOTICS", bg=bg, fg=accent,
+             font=("DejaVu Sans", 10, "bold")).pack(anchor="w")
+    tk.Label(body, text="ROV mission control", bg=bg, fg=text,
+             font=("DejaVu Sans", 25, "bold")).pack(anchor="w", pady=(8, 4))
+    tk.Label(body, text="Choose your platform and start exploring.",
+             bg=bg, fg=muted).pack(anchor="w", pady=(0, 22))
+    scenario = tk.StringVar(root, value="real_rov.scn")
+
+    # Resolve installed assets first, with a source-tree fallback for direct runs.
+    try:
+        from ament_index_python.packages import get_package_share_directory
+        icons = Path(get_package_share_directory(PACKAGE)) / "icons"
+    except (ImportError, LookupError):
+        icons = Path(__file__).resolve().parents[2] / "icons"
+    root.launcher_images = []
+
+    def card(mode, title, description, button_text, filename):
+        frame = tk.Frame(body, bg=panel, highlightbackground=border, highlightthickness=1)
+        frame.pack(fill="x", pady=(0, 14))
+        photo_frame = tk.Frame(frame, bg=panel, width=176, height=132)
+        photo_frame.pack(side="left", padx=16, pady=18)
+        photo_frame.pack_propagate(False)
+        try:
+            photo = tk.PhotoImage(master=root, file=str(icons / filename))
+            root.launcher_images.append(photo)
+            tk.Label(photo_frame, image=photo, bg=panel).pack(expand=True)
+        except tk.TclError:
+            tk.Label(photo_frame, text="SIM" if mode == "sim" else "ROV",
+                     font=("DejaVu Sans", 24, "bold"), bg=panel, fg=accent).pack(expand=True)
+        content = tk.Frame(frame, bg=panel)
+        content.pack(side="left", fill="both", expand=True, padx=(0, 18), pady=16)
+        tk.Label(content, text=title, bg=panel, fg=text,
+                 font=("DejaVu Sans", 16, "bold")).pack(anchor="w")
+        tk.Label(content, text=description, bg=panel, fg=muted,
+                 justify="left", wraplength=370).pack(anchor="w", pady=(4, 10))
+        if mode == "sim":
+            row = tk.Frame(content, bg=panel)
+            row.pack(fill="x", pady=(0, 10))
+            tk.Label(row, text="Model", bg=panel, fg=muted).pack(side="left", padx=(0, 10))
+            ttk.Combobox(row, textvariable=scenario, state="readonly", width=20,
+                         style="Marine.TCombobox", values=("real_rov.scn", "rov_v1.scn",
+                         "rov_v2.scn", "rov_v3.scn", "rov_v4.scn")).pack(side="left", fill="x", expand=True)
+        tk.Button(content, text=button_text, command=lambda: launch_mode(mode, root, scenario.get()),
+                  bg="#11718b" if mode == "sim" else "#16556c", fg=text,
+                  activebackground="#2096a8", activeforeground="white",
+                  relief="flat", borderwidth=0, padx=16, pady=10, cursor="hand2",
+                  highlightthickness=2, highlightbackground=panel, highlightcolor=accent,
+                  font=("DejaVu Sans", 11, "bold")).pack(anchor="w", fill="x")
+        return frame
+
+    card("sim", "Stonefish simulation", "Coral reef • Virtual vehicle & sensors",
+         "Launch simulation  →", "launcher_sim.png")
+    card("real", "Real ROV", "Connect to the physical vehicle.\nConfirmation required before launch.",
+         "Connect to real ROV  →", "launcher_real.png")
+    tk.Label(body, text="ROS 2 JAZZY     /     QUT ROV", bg=bg, fg=muted,
+             font=("DejaVu Sans", 9)).pack(side="bottom", anchor="w", pady=(8, 0))
+    return scenario
+
+
 def main():
     root = tk.Tk()
-    root.title("QUT ROV Control")
-    root.geometry("560x500")
-    root.resizable(False, False)
-
-    title = tk.Label(
-        root,
-        text="QUT ROV Control",
-        font=("Arial", 24, "bold"),
-    )
-    title.pack(pady=(28, 5))
-
-    subtitle = tk.Label(
-        root,
-        text="Select the platform to control",
-        font=("Arial", 12),
-    )
-    subtitle.pack(pady=(0, 25))
-
-    rov_scenario = tk.StringVar(root, value="main_rov.scn")
-    scenario_frame = tk.LabelFrame(root, text="Simulation ROV scenario", padx=12, pady=6)
-    scenario_frame.pack(fill="x", padx=45, pady=(0, 8))
-    for filename in ("rov_v1.scn", "rov_v2.scn", "rov_v3.scn", "rov_v4.scn"):
-        tk.Radiobutton(
-            scenario_frame, text=filename, variable=rov_scenario,
-            value=filename, anchor="w",
-        ).pack(fill="x")
-
-    sim_button = tk.Button(
-        root,
-        text="Stonefish Simulation",
-        font=("Arial", 16, "bold"),
-        width=27,
-        height=2,
-        command=lambda: launch_mode("sim", root, rov_scenario.get()),
-    )
-    sim_button.pack(pady=8)
-
-    real_button = tk.Button(
-        root,
-        text="Real ROV",
-        font=("Arial", 16, "bold"),
-        width=27,
-        height=2,
-        command=lambda: launch_mode("real", root),
-    )
-    real_button.pack(pady=8)
-
-    footer = tk.Label(
-        root,
-        text="ROS 2 Jazzy • stonefish_qut_rov",
-        font=("Arial", 9),
-    )
-    footer.pack(side="bottom", pady=14)
-
+    build_window(root)
     root.mainloop()
 
 

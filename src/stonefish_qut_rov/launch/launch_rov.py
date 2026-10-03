@@ -12,10 +12,10 @@ from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 def generate_launch_description():
     package = get_package_share_directory("stonefish_qut_rov")
     return LaunchDescription([
-        DeclareLaunchArgument("environment", default_value="pool_environment",
+        DeclareLaunchArgument("environment", default_value="ocean_environment",
                               choices=["ocean_environment", "pool_environment"]),
-        DeclareLaunchArgument("rov_scenario", default_value="rov_v2.scn",
-                              choices=["rov_v1.scn", "rov_v2.scn", "rov_v3.scn", "rov_v4.scn"]),
+        DeclareLaunchArgument("rov_scenario", default_value="real_rov.scn",
+                              choices=["rov_v1.scn", "rov_v2.scn", "rov_v3.scn", "rov_v4.scn", "real_rov.scn"]),
         GroupAction([
             SetParameter(name="rov_scenario", value=PathJoinSubstitution([
                 package, "scenarios", LaunchConfiguration("rov_scenario")])),

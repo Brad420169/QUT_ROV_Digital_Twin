@@ -10,6 +10,7 @@ install(
     launch
     scenarios
     cad_model_data
+    icons
     models
   DESTINATION share/${PROJECT_NAME}
 )
