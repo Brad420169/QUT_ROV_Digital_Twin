@@ -53,6 +53,7 @@ class PWMMonitor(Node):
         print(
             f"Read-only PWM monitor: {namespace}/rc/override and {namespace}/rc/out\n"
             "PWM units: microseconds. M1..M4 = FCU output channels 1..4.\n"
+            "TX array indices: ch[2] = heave, ch[3] = yaw, ch[4] = surge.\n"
             "Output is FCU-reported PWM, NOT measured motor RPM or thrust.\n"
             "Requests and outputs are latest independent samples, not matched acknowledgements.\n"
             "STALE means no new sample for >2 seconds. Ctrl+C stops only this monitor.",

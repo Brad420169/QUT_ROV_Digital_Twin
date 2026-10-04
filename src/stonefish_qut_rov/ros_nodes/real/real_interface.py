@@ -13,7 +13,7 @@ Publishes to MAVROS:
 
 Bridges MAVROS sensors onto the common topics teleop_controller uses,
 so the controller cannot tell sim from real:
-    /mavros/imu/static_pressure  ->  /qut_rov/depth  (Float64, metres)
+    /uas1/mavlink_source (143)   ->  /qut_rov/pressure (Pa) + /qut_rov/depth (m)
     /mavros/imu/data             ->  /qut_rov/imu    (Imu)
 
 NOTE ON THRUST ALLOCATION
@@ -40,11 +40,12 @@ Prerequisites:
 """
 
 import math
+import struct
 import time
 
 import rclpy
 from geometry_msgs.msg import Twist
-from mavros_msgs.msg import OverrideRCIn, State
+from mavros_msgs.msg import Mavlink, OverrideRCIn, State
 from mavros_msgs.srv import CommandBool, MessageInterval, SetMode
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
@@ -68,6 +69,10 @@ from rov_config import (
     REAL_IMU_TOPIC,
     REAL_MESSAGE_INTERVAL_SERVICE,
     REAL_PRESSURE_TOPIC,
+    REAL_MAVLINK_TOPIC,
+    REAL_PRESSURE_MESSAGE_ID,
+    REAL_PRESSURE_SYSTEM_ID,
+    REAL_PRESSURE_COMPONENT_ID,
     REAL_SENSOR_RATE_HZ,
     REAL_RC_NEUTRAL_US,
     REAL_RC_OVERRIDE_TOPIC,
@@ -165,10 +170,11 @@ class RealInterface(Node):
             10,
         )
 
+        self.pressure_pub = self.create_publisher(FluidPressure, REAL_PRESSURE_TOPIC, 10)
         self.pressure_sub = self.create_subscription(
-            FluidPressure,
-            REAL_PRESSURE_TOPIC,
-            self.pressure_callback,
+            Mavlink,
+            REAL_MAVLINK_TOPIC,
+            self.mavlink_pressure_callback,
             SENSOR_QOS,
         )
 
@@ -299,6 +305,25 @@ class RealInterface(Node):
     # ------------------------------------------------------------------
     # Sensor bridges -> common topics
     # ------------------------------------------------------------------
+    def mavlink_pressure_callback(self, msg: Mavlink):
+        if (msg.msgid != REAL_PRESSURE_MESSAGE_ID
+                or msg.sysid != REAL_PRESSURE_SYSTEM_ID
+                or msg.compid != REAL_PRESSURE_COMPONENT_ID
+                or msg.framing_status != Mavlink.FRAMING_OK):
+            return
+        payload = b"".join(int(word).to_bytes(8, "little") for word in msg.payload64)
+        if not 1 <= msg.len <= min(len(payload), 16):
+            return
+        # SCALED_PRESSURE3: uint32 time, float absolute pressure (hPa).
+        # MAVLink 2 may trim trailing zeros, even within a field.
+        pressure = struct.unpack_from("<f", payload[:msg.len].ljust(8, b"\0"), 4)[0] * 100.0
+        out = FluidPressure()
+        out.header = msg.header
+        out.fluid_pressure = pressure
+        if math.isfinite(pressure) and pressure > 0:
+            self.pressure_pub.publish(out)
+        self.pressure_callback(out)
+
     def pressure_callback(self, msg: FluidPressure):
         pressure = float(msg.fluid_pressure)
         if not math.isfinite(pressure) or pressure <= 0:

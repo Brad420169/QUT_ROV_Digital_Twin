@@ -29,7 +29,11 @@ SIM_PRESSURE_TOPIC = "/qut_rov/pressure"
 
 # MAVROS (REAL ROV) TOPICS
 REAL_RC_OVERRIDE_TOPIC = "/mavros/rc/override"
-REAL_PRESSURE_TOPIC    = "/mavros/imu/static_pressure"
+REAL_PRESSURE_TOPIC    = "/qut_rov/pressure"  # Decoded Bar30 pressure, Pa
+REAL_MAVLINK_TOPIC     = "/uas1/mavlink_source"
+REAL_PRESSURE_MESSAGE_ID = 143  # SCALED_PRESSURE3, selected from pool trial
+REAL_PRESSURE_SYSTEM_ID = 1
+REAL_PRESSURE_COMPONENT_ID = 1
 REAL_IMU_TOPIC         = "/mavros/imu/data"
 REAL_SET_MODE_SERVICE  = "/mavros/set_mode"
 REAL_ARMING_SERVICE    = "/mavros/cmd/arming"
@@ -41,8 +45,8 @@ REAL_MESSAGE_INTERVAL_SERVICE = "/mavros/set_message_interval"
 # (confirmed on the bench: SET_MESSAGE_INTERVAL is the only thing that
 # actually sticks — writing the SRx params directly did not).
 REAL_SENSOR_RATE_HZ = 30.0
-# MAVLink common.xml message IDs: ATTITUDE, RAW_IMU, SCALED_PRESSURE.
-REAL_FAST_STREAM_MESSAGE_IDS = (30, 27, 29)
+# MAVLink message IDs: ATTITUDE, RAW_IMU, selected Bar30 pressure.
+REAL_FAST_STREAM_MESSAGE_IDS = (30, 27, REAL_PRESSURE_MESSAGE_ID)
 
 # REAL ROV CAMERA (Z-1Mini, RTSP)
 # Default pod address is 192.168.144.108. Either reconfigure the pod to
@@ -96,11 +100,16 @@ YAW_MANUAL_SCALE = 0.5
 
 # DEPTH CONTROLLER
 DEPTH_KP = 200.0 / 600.0
-DEPTH_KI = 50.0   / 600.0
-DEPTH_KD = 100.0  / 600.0
+DEPTH_KI = 50.0  / 600.0
+DEPTH_KD = 100.0 / 600.0
 
 DEPTH_INTEGRAL_LIMIT = 400.0 / 600.0
 DEPTH_FEEDFORWARD    = -160.0 / 600.0
+
+# Physical-vehicle base gains; preserve the independently tuned twin gains above.
+REAL_DEPTH_KI = 5.0 / 600.0
+REAL_DEPTH_KD = 80.0 / 600.0
+REAL_YAW_KP = 0.2
 
 # YAW / TRAJECTORY CONTROLLER
 YAW_KP             = 0.0
@@ -121,6 +130,7 @@ from sim_to_real_scales import (          # noqa: E402,F401
     REAL_RC_RANGE_US,
     REAL_SCALE_DEPTH_FF,
     REAL_SCALE_DEPTH_KD,
+    REAL_SCALE_DEPTH_TRAJ_KD,
     REAL_SCALE_DEPTH_KI,
     REAL_SCALE_DEPTH_KP,
     REAL_SCALE_MANUAL_HEAVE,
@@ -131,6 +141,7 @@ from sim_to_real_scales import (          # noqa: E402,F401
     REAL_SCALE_YAW_KD,
     REAL_SCALE_YAW_KI,
     REAL_SCALE_YAW_KP,
+    REAL_YAW_DEADBAND_DEG,
     REAL_SURFACE_PRESSURE_PA,
     REAL_WATER_DENSITY,
     REAL_YAW_INVERT,

@@ -13,6 +13,7 @@ class PIDController:
         output_max: float = 1.0,
         integral_limit: float = 0.3,
         wrap_angle: bool = False,
+        deadband: float = 0.0,
     ):
         self.kp = kp
         self.ki = ki
@@ -20,6 +21,9 @@ class PIDController:
         self.output_min = output_min
         self.output_max = output_max
         self.integral_limit = integral_limit
+        if deadband < 0:
+            raise ValueError("deadband must be non-negative")
+        self.deadband = deadband
         self.wrap_angle = wrap_angle
 
         self._integral = 0.0
@@ -41,6 +45,12 @@ class PIDController:
         error = setpoint - measurement
         if self.wrap_angle:
             error = wrap_to_pi(error)
+
+        if self.deadband and abs(error) <= self.deadband:
+            self.reset()
+            return 0.0
+        if self.deadband:
+            error -= self.deadband if error > 0 else -self.deadband
 
         p_term = self.kp * error
 

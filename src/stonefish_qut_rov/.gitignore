@@ -3,5 +3,4 @@ __pycache__/
 build/
 install/
 log/
-tests/
 .pytest_cache/

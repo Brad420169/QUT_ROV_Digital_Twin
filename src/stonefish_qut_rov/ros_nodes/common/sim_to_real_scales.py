@@ -55,7 +55,7 @@ REAL_PITCH_INVERT = True
 
 REAL_SCALE_MANUAL_SURGE = 0.5
 REAL_SCALE_MANUAL_YAW   = 0.5
-REAL_SCALE_MANUAL_HEAVE = 0.5
+REAL_SCALE_MANUAL_HEAVE = 0.3
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -69,11 +69,11 @@ REAL_SCALE_MANUAL_HEAVE = 0.5
 # Symptom -> action:
 #   ROV sinks while holding depth      -> increase (more up-thrust)
 #   ROV climbs while holding depth     -> decrease
-REAL_SCALE_DEPTH_FF = 1.0
+REAL_SCALE_DEPTH_FF = 1
 
 # Proportional. Sluggish to return to setpoint -> increase.
 # Overshoots / hunts around the setpoint -> decrease.
-REAL_SCALE_DEPTH_KP = 1.0
+REAL_SCALE_DEPTH_KP = 4
 
 # Derivative. Increase to damp oscillation, but too much makes the
 # vertical thrusters chatter on noisy Bar30 data.
@@ -82,7 +82,7 @@ REAL_SCALE_DEPTH_KD = 1.0
 # Integral. Only needed if there is a persistent steady-state depth
 # offset that FF has not removed. Raise last and slowly — this is the
 # one that will wind up and surface the ROV if you get it wrong.
-REAL_SCALE_DEPTH_KI = 1.0
+REAL_SCALE_DEPTH_KI = 0
 
 # NOTE: scaling a gain changes loop dynamics, not just magnitude. A
 # single shared factor is only strictly valid if the plant differs from
@@ -95,16 +95,23 @@ REAL_SCALE_DEPTH_KI = 1.0
 # ─────────────────────────────────────────────────────────────────────
 
 # Forward speed used in trajectory mode.
-REAL_SCALE_TRAJ_FORWARD = 0.5
+REAL_SCALE_TRAJ_FORWARD = 1
 
 # Scales the yaw output clamp in trajectory mode.
 REAL_SCALE_TRAJ_YAW = 1.0
 
-# Heading hold gains. The sim gains are currently 0.0, so these scalers
-# do nothing until YAW_KP/KI/KD in rov_config.py are non-zero.
+
+# Heading hold: zero yaw thrust within this angle of the captured heading.
+REAL_YAW_DEADBAND_DEG = 5.0
+
+# Multipliers for the real heading gains in rov_config.py.
 REAL_SCALE_YAW_KP = 1.0
 REAL_SCALE_YAW_KI = 1.0
 REAL_SCALE_YAW_KD = 1.0
+
+# Trajectory-only multiplier of REAL_DEPTH_KD, independent of REAL_SCALE_DEPTH_KD.
+# 1.0 = base D gain; 3.0 = three times base. Station keeping is unchanged.
+REAL_SCALE_DEPTH_TRAJ_KD = 3
 
 
 # ─────────────────────────────────────────────────────────────────────

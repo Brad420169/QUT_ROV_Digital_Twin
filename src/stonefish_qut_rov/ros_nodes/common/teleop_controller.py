@@ -13,7 +13,7 @@ SIM mode:
 
 REAL mode:
     Manual/depth/trajectory remain available.
-    Tennis-ball centering using camera pixels (yaw/heave).
+    Tennis-ball following using camera pixels and estimated distance (surge/yaw/heave).
 """
 
 import math
@@ -67,8 +67,12 @@ from rov_config import (
     JOY_TIMEOUT_S,
     SENSOR_TIMEOUT_S,
     FISH_COMMAND_TIMEOUT_S,
+    REAL_DEPTH_KI,
+    REAL_DEPTH_KD,
+    REAL_YAW_KP,
     REAL_SCALE_DEPTH_FF,
     REAL_SCALE_DEPTH_KD,
+    REAL_SCALE_DEPTH_TRAJ_KD,
     REAL_SCALE_DEPTH_KI,
     REAL_SCALE_DEPTH_KP,
     REAL_SCALE_MANUAL_HEAVE,
@@ -79,6 +83,7 @@ from rov_config import (
     REAL_SCALE_YAW_KD,
     REAL_SCALE_YAW_KI,
     REAL_SCALE_YAW_KP,
+    REAL_YAW_DEADBAND_DEG,
     STATION_KEEPING_BUTTON,
     TRAJECTORY_FORWARD,
     TRAJECTORY_MAX_YAW,
@@ -209,6 +214,7 @@ class GamepadTeleop(Node):
             output_min=-self.k_traj_max_yaw,
             output_max=self.k_traj_max_yaw,
             wrap_angle=True,
+            deadband=math.radians(REAL_YAW_DEADBAND_DEG) if self.rov_mode == "real" else 0.0,
         )
 
         # ROS
@@ -305,6 +311,7 @@ class GamepadTeleop(Node):
         if dt <= 0.0 or dt > 1.0:
             return
 
+        self.depth_pid.kd = self.k_depth_traj_kd if self.trajectory_mode else self.k_depth_kd
         pid_output = self.depth_pid.compute(
             setpoint=self.target_depth,
             measurement=self.current_depth,
@@ -321,7 +328,7 @@ class GamepadTeleop(Node):
         if not all(math.isfinite(v) for v in values) or sum(v*v for v in values) < 1e-12 or msg.orientation_covariance[0] == -1:
             self.inputs["imu"].invalidate()
             return
-        if self.trajectory_mode and not self.inputs["imu"].fresh():
+        if (self.trajectory_mode or (self.rov_mode == "real" and self.depth_keeping)) and not self.inputs["imu"].fresh():
             self._cancel_for_input_loss("imu")
         self.inputs["imu"].touch()
 
@@ -335,7 +342,7 @@ class GamepadTeleop(Node):
         if self.fish_follow_mode:
             return
 
-        if not self.trajectory_mode or self.target_yaw is None:
+        if not (self.trajectory_mode or (self.rov_mode == "real" and self.depth_keeping)) or self.target_yaw is None:
             self.prev_yaw_time = self.get_clock().now()
             return
 
@@ -371,8 +378,9 @@ class GamepadTeleop(Node):
             self._cancel_for_input_loss("fish")
             return
         self.inputs["fish"].touch()
-        self.fish_surge_cmd = 0.0 if self.rov_mode == 'real' else clamp(float(msg.linear.x))
         limit = .3 if self.rov_mode == 'real' else 1.0
+        minimum_surge = 0.0 if self.rov_mode == 'real' else -limit
+        self.fish_surge_cmd = max(minimum_surge, min(limit, float(msg.linear.x)))
         self.fish_heave_cmd = max(-limit, min(limit, float(msg.linear.z)))
         self.fish_yaw_cmd = max(-limit, min(limit, float(msg.angular.z)))
 
@@ -420,14 +428,15 @@ class GamepadTeleop(Node):
             * self.scale_manual_surge
         )
 
-        self.yaw_cmd = (
-            apply_deadzone(
-                axes[AXIS_RIGHT_STICK_X],
-                DEADZONE,
+        if self.rov_mode == "sim" or not self.depth_keeping:
+            self.yaw_cmd = (
+                apply_deadzone(
+                    axes[AXIS_RIGHT_STICK_X],
+                    DEADZONE,
+                )
+                * YAW_MANUAL_SCALE
+                * self.scale_manual_yaw
             )
-            * YAW_MANUAL_SCALE
-            * self.scale_manual_yaw
-        )
 
         if not self.depth_keeping:
             ascend = trigger_to_command(
@@ -634,14 +643,15 @@ class GamepadTeleop(Node):
 
         # Depth hold
         self.k_depth_kp = self._scaled(DEPTH_KP, REAL_SCALE_DEPTH_KP)
-        self.k_depth_ki = self._scaled(DEPTH_KI, REAL_SCALE_DEPTH_KI)
-        self.k_depth_kd = self._scaled(DEPTH_KD, REAL_SCALE_DEPTH_KD)
+        self.k_depth_ki = DEPTH_KI if is_sim else REAL_DEPTH_KI * REAL_SCALE_DEPTH_KI
+        self.k_depth_kd = DEPTH_KD if is_sim else REAL_DEPTH_KD * REAL_SCALE_DEPTH_KD
+        self.k_depth_traj_kd = DEPTH_KD if is_sim else REAL_DEPTH_KD * REAL_SCALE_DEPTH_TRAJ_KD
         self.k_depth_ff = self._scaled(
             DEPTH_FEEDFORWARD, REAL_SCALE_DEPTH_FF
         )
 
         # Heading hold
-        self.k_yaw_kp = self._scaled(YAW_KP, REAL_SCALE_YAW_KP)
+        self.k_yaw_kp = YAW_KP if is_sim else REAL_YAW_KP * REAL_SCALE_YAW_KP
         self.k_yaw_ki = self._scaled(YAW_KI, REAL_SCALE_YAW_KI)
         self.k_yaw_kd = self._scaled(YAW_KD, REAL_SCALE_YAW_KD)
 
@@ -668,24 +678,40 @@ class GamepadTeleop(Node):
                 )
                 return
 
+            if self.rov_mode == "real":
+                if self.current_yaw is None or not self.inputs["imu"].fresh():
+                    self.get_logger().warn("Depth/heading hold NOT enabled: no fresh IMU data.")
+                    return
+
+                self.target_yaw = self.current_yaw
+                self.prev_yaw_time = None
+                self.yaw_cmd = 0.0
+                self.yaw_pid.reset()
             self.depth_keeping = True
             self.target_depth = self.current_depth
             self.prev_depth_time = None
             self.depth_pid.reset()
 
             self.get_logger().info(
-                f"Depth keeping ENABLED | {self.target_depth:.2f} m"
+                (f"Depth/heading hold ENABLED | {self.target_depth:.2f} m | "
+                 f"heading {math.degrees(self.target_yaw):.1f} deg | deadband ±{REAL_YAW_DEADBAND_DEG:g} deg")
+                if self.rov_mode == "real" else f"Depth keeping ENABLED | {self.target_depth:.2f} m"
             )
 
         else:
             self.depth_keeping = False
+            if self.rov_mode == "real":
+                self.target_yaw = None
+                self.prev_yaw_time = None
+                self.yaw_cmd = 0.0
+                self.yaw_pid.reset()
             self.target_depth = None
             self.heave_cmd = 0.0
             self.prev_depth_time = None
             self.depth_pid.reset()
 
             self.get_logger().info(
-                "Depth keeping DISABLED"
+                "Depth/heading hold DISABLED" if self.rov_mode == "real" else "Depth keeping DISABLED"
             )
 
     # TRAJECTORY
@@ -810,7 +836,7 @@ class GamepadTeleop(Node):
             self.fish_heave_cmd = 0.0
             self.fish_yaw_cmd = 0.0
 
-        label = 'Tennis-ball centering' if self.rov_mode == 'real' else 'Fish following'
+        label = 'Tennis-ball following' if self.rov_mode == 'real' else 'Fish following'
         self.get_logger().info(f"{label} {'ENABLED' if enabled else 'DISABLED'}")
 
     def _cancel_for_input_loss(self, source):
@@ -840,7 +866,7 @@ class GamepadTeleop(Node):
         required = ["joy"]
         if self.depth_keeping or self.trajectory_mode:
             required.append("depth")
-        if self.trajectory_mode:
+        if self.trajectory_mode or (self.rov_mode == "real" and self.depth_keeping):
             required.append("imu")
         if self.fish_follow_mode:
             required.append("fish")

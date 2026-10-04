@@ -26,6 +26,8 @@ install(
     ros_nodes/sim/fish_detector_follower.py
     ros_nodes/real/real_interface.py
     ros_nodes/common/imu_depth_plotter.py
+    ros_nodes/real/pressure_streams.py
+    ros_nodes/real/tennis_ball_debug.py
     ros_nodes/real/pwm_monitor.py
     ros_nodes/real/camera_viewer_rtsp.py
   DESTINATION lib/${PROJECT_NAME}

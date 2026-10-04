@@ -12,7 +12,7 @@ Subscribes:
 
 OpenCV yellow-ball detection runs only while the camera window is shown.
 When enabled by teleop,
-the tracker publishes normalized yaw/heave commands to /qut_rov/tennis_ball_cmd.
+the tracker publishes normalized surge/yaw/heave commands to /qut_rov/tennis_ball_cmd.
 
 Standalone (window opens immediately):
     ros2 run stonefish_qut_rov camera_viewer_rtsp.py \

@@ -23,7 +23,7 @@ MAVROS_LOG_FILE = "/tmp/mavros.log"
 
 
 def print_controls(rov_mode: str):
-    fish_text = "AVAILABLE" if rov_mode == "sim" else "DISABLED"
+    fish_text = "AVAILABLE" if rov_mode == "sim" else "BALL FOLLOW"
 
     print()
     print("╔══════════════════════════════════════════════╗")
@@ -32,7 +32,7 @@ def print_controls(rov_mode: str):
     print("║ Left stick ↑↓     Surge                      ║")
     print("║ Right stick ←→    Yaw                        ║")
     print("║ RT / LT           Heave up / down            ║")
-    print("║ L bumper          Depth keeping              ║")
+    print("║ L bumper          Depth hold (+heading real) ║")
     print("║ R bumper          Trajectory mode            ║")
     print("║ Y button          Camera / detector          ║")
     print("║ X button          Fish follow (Cam Window)   ║")
