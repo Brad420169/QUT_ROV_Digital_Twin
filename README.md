@@ -24,13 +24,13 @@ directly.
 
 ### Digital Twin and real vehicle side by side
 
-The real physical ROV, with the Digital Twin displayed on the laptop
-screen in the background:
-
 <p align="center">
-  <img src="src/stonefish_qut_rov/icons/IMG_7584.jpeg"
-       alt="Real SubbyROV in the field with the Digital Twin running on a laptop screen in the background"
-       width="100%">
+  <img src="src/stonefish_qut_rov/icons/real.png"
+       alt="Real SubbyROV"
+       height="250">
+  <img src="src/stonefish_qut_rov/icons/sim_icon.png"
+       alt="SubbyROV digital twin"
+       height="250">
 </p>
 
 ### Digital Twin functions
