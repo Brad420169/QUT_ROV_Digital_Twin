@@ -10,9 +10,44 @@
         <look name="default" rgb="1.0 1.0 1.0" roughness="1.0" metalness="0.0"/>
             </looks>
 
-    <robot name="$(arg vehicle_name)" fixed="false" self_collisions="false">
+    <robot name="$(arg vehicle_name)" fixed="true" self_collisions="false">
 
-        <base_link name="base_link" type="model" physics="submerged">
+        <base_link name="stability_anchor" type="sphere" physics="disabled" buoyant="false" collisions="false">
+            <dimensions radius="0.00001"/>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <material name="HullMat"/>
+            <look name="default"/>
+        </base_link>
+
+        <link name="stability_x" type="sphere" physics="disabled" buoyant="false" collisions="false">
+            <dimensions radius="0.00001"/>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <material name="HullMat"/>
+            <look name="default"/>
+        </link>
+
+        <link name="stability_y" type="sphere" physics="disabled" buoyant="false" collisions="false">
+            <dimensions radius="0.00001"/>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <material name="HullMat"/>
+            <look name="default"/>
+        </link>
+
+        <link name="stability_z" type="sphere" physics="disabled" buoyant="false" collisions="false">
+            <dimensions radius="0.00001"/>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <material name="HullMat"/>
+            <look name="default"/>
+        </link>
+
+        <link name="stability_yaw" type="sphere" physics="disabled" buoyant="false" collisions="false">
+            <dimensions radius="0.00001"/>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <material name="HullMat"/>
+            <look name="default"/>
+        </link>
+
+        <link name="base_link" type="model" physics="submerged">
 
         <!-- Both meshes are baked into NED (+X forward, +Y right, +Z down).
              OBJ units are centimetres; both mesh origins must remain identity. -->
@@ -28,15 +63,57 @@
 
             <material name="HullMat"/>
             <look name="rov_body"/>
-            <!-- Measured vehicle mass; CG remains the initial estimate. -->
+            <!-- Measured mass; idealised CG below CB to restore pitch toward level. -->
             <mass value="3.5"/>
-            <cg xyz="-0.0882 -0.0198 -0.02" rpy="0 0 0"/>
-        </base_link>
+            <inertia xyz="0.03 0.536 0.0535"/>
+            <cg xyz="-0.08727407389761058 -0.0198125123563815 0.04" rpy="0 0 0"/>
+        </link>
 
 
+        <!-- Unlimited XYZ travel and yaw, followed by limited body-Y pitch. -->
+        <joint name="free_stability_x" type="prismatic">
+            <parent name="stability_anchor"/>
+            <child name="stability_x"/>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <axis xyz="1 0 0"/>
+            <damping value="0"/>
+        </joint>
+        <joint name="free_stability_y" type="prismatic">
+            <parent name="stability_x"/>
+            <child name="stability_y"/>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <axis xyz="0 1 0"/>
+            <damping value="0"/>
+        </joint>
+        <joint name="free_stability_z" type="prismatic">
+            <parent name="stability_y"/>
+            <child name="stability_z"/>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <axis xyz="0 0 1"/>
+            <damping value="0"/>
+        </joint>
+        <joint name="free_yaw" type="revolute">
+            <parent name="stability_z"/>
+            <child name="stability_yaw"/>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <axis xyz="0 0 1"/>
+            <damping value="0"/>
+        </joint>
+
+        <!-- Viscous pitch damping; limits in radians. Small solver overshoot is possible. -->
+        <joint name="limited_pitch" type="revolute">
+            <parent name="stability_yaw"/>
+            <child name="base_link"/>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <axis xyz="0 1 0"/>
+            <limits min="-0.03490658503988659" max="0.03490658503988659"/>
+            <damping value="0.3"/>
+        </joint>
+
+        <!-- Vertical thrust line 1 mm forward of CG; surge thrust plane at CG Z. -->
         <actuator name="TL" type="thruster">
             <link name="base_link"/>
-            <origin xyz="-0.078312 -0.16491 -0.03184" rpy="0 -1.5708 0"/>
+            <origin xyz="-0.08627407389761058 -0.1598125123563815 -0.03" rpy="0 -1.5707963267948966 0"/>
             <specs max_setpoint="1200.0" inverted_setpoint="false" normalized_setpoint="false"/>
             <rotor_dynamics type="zero_order"/>
             <thrust_model type="fluid_dynamics">
@@ -45,7 +122,7 @@
                 <torque_coeff value="0.00001"/>
             </thrust_model>
             <propeller diameter="0.077" right="false">
-                <mesh filename="cad_model_data/thrusters/ccw_thruster.obj" scale="0.001"/>
+                <mesh filename="cad_model_data/thrusters/ccw_thruster.obj" scale="1.0"/>
                 <material name="Neutral"/>
                 <look name="thruster"/>
             </propeller>
@@ -54,7 +131,7 @@
         <!-- Thruster TR -->
         <actuator name="TR" type="thruster">
             <link name="base_link"/>
-            <origin xyz="-0.079222 0.12337 -0.03164" rpy="0 -1.5708 0"/>
+            <origin xyz="-0.08627407389761058 0.1201874876436185 -0.03" rpy="0 -1.5707963267948966 0"/>
             <specs max_setpoint="1200.0" inverted_setpoint="true" normalized_setpoint="false"/>
             <rotor_dynamics type="zero_order"/>
             <thrust_model type="fluid_dynamics">
@@ -63,7 +140,7 @@
                 <torque_coeff value="0.00001"/>
             </thrust_model>
             <propeller diameter="0.077" right="true">
-                <mesh filename="cad_model_data/thrusters/cw_thruster.obj" scale="0.001"/>
+                <mesh filename="cad_model_data/thrusters/cw_thruster.obj" scale="1.0"/>
                 <material name="Neutral"/>
                 <look name="thruster"/>
             </propeller>
@@ -72,7 +149,7 @@
         <!-- Thruster BL -->
         <actuator name="BL" type="thruster">
             <link name="base_link"/>
-            <origin xyz="-0.17488 -0.15991 -0.05295" rpy="0.0 0.0 0.0"/>
+            <origin xyz="-0.1746 -0.1598125123563815 -0.03" rpy="0.0 0.0 0.0"/>
             <specs max_setpoint="1200.0" inverted_setpoint="false" normalized_setpoint="false"/>
             <rotor_dynamics type="zero_order"/>
             <thrust_model type="fluid_dynamics">
@@ -81,7 +158,7 @@
                 <torque_coeff value="0.00001"/>
             </thrust_model>
             <propeller diameter="0.077" right="true">
-                <mesh filename="cad_model_data/thrusters/cw_thruster.obj" scale="0.001"/>
+                <mesh filename="cad_model_data/thrusters/cw_thruster.obj" scale="1.0"/>
                 <material name="Neutral"/>
                 <look name="thruster"/>
             </propeller>
@@ -90,7 +167,7 @@
         <!-- Thruster BR -->
         <actuator name="BR" type="thruster">
             <link name="base_link"/>
-            <origin xyz="-0.17432 0.11837 -0.05175" rpy="0.0 0.0 0.0"/>
+            <origin xyz="-0.1746 0.1201874876436185 -0.03" rpy="0.0 0.0 0.0"/>
             <specs max_setpoint="1200.0" inverted_setpoint="true" normalized_setpoint="false"/>
             <rotor_dynamics type="zero_order"/>
             <thrust_model type="fluid_dynamics">
@@ -99,7 +176,7 @@
                 <torque_coeff value="0.00001"/>
             </thrust_model>
             <propeller diameter="0.077" right="false">
-                <mesh filename="cad_model_data/thrusters/ccw_thruster.obj" scale="0.001"/>
+                <mesh filename="cad_model_data/thrusters/ccw_thruster.obj" scale="1.0"/>
                 <material name="Neutral"/>
                 <look name="thruster"/>
             </propeller>
@@ -142,6 +219,8 @@
 
                 <!-- Transform + ROS -->
         <world_transform xyz="$(arg position)" rpy="$(arg orientation)"/>
+        <!-- Report the moving vehicle, not the fixed constraint anchor. -->
+        <ros_base_link_transform publish="true" link="base_link"/>
         <ros_subscriber thrusters="/$(arg vehicle_name)/setpoint/thrusters"/>
 
     </robot>

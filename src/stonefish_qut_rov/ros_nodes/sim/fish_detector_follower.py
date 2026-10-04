@@ -73,9 +73,9 @@ class FishDetectorFollower(Node):
         self.declare_parameter("yaw_deadband_px", 5.0)
         self.declare_parameter("heave_deadband_px", 20.0)
 
-        self.declare_parameter("yaw.kp", 1.9)
-        self.declare_parameter("yaw.ki", 0.4)
-        self.declare_parameter("yaw.kd", 0.4)
+        self.declare_parameter("yaw.kp", 0.8)
+        self.declare_parameter("yaw.ki", 0.0)
+        self.declare_parameter("yaw.kd", 0.2)
         self.declare_parameter("pitch.kp", 15.0)
         self.declare_parameter("pitch.ki", 5.0)
         self.declare_parameter("pitch.kd", 3.0)
@@ -523,6 +523,10 @@ class FishDetectorFollower(Node):
                 1.0,
             )
         )
+
+        # Stop forward thrust within the estimated following distance (metres).
+        if estimated_distance <= 1.0:
+            surge = 0.0
 
         heave = float(
             np.clip(
