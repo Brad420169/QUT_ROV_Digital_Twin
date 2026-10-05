@@ -6,6 +6,37 @@ ROV**, accelerating autonomy development.
 
 This was made for the EGH490 Research Project at QUT.
 
+## Physical-vehicle updates
+
+The real backend includes the current Real_ROV pressure decoder, controller tuning,
+depth/heading hold, and tennis-ball distance following. Simulation retains its
+existing gains, depth-only hold, Stonefish allocation, and YOLO follower.
+
+Real pressure comes from MAVLink SCALED_PRESSURE3 (143), system/component 1/1,
+on `/uas1/mavlink_source`. Keep the sensor in air during startup calibration.
+Real depth hold also captures heading with a 5-degree deadband; trajectory mode
+uses separate depth damping. The differing real base gains are `REAL_DEPTH_KI`,
+`REAL_DEPTH_KD`, and `REAL_YAW_KP` in `rov_config.py`; real multipliers remain in
+`sim_to_real_scales.py`. Changing the twin's base gains does not replace these
+explicit real overrides.
+
+Real tennis-ball following uses yaw/heave PD control and a fixed-zoom distance
+estimate. Defaults command 0.25 normalized forward effort above an estimated
+0.2 m distance. Camera/ball calibration and physical operation still require
+vehicle validation. `tennis_ball_debug.py` displays the camera and HSV mask;
+`pressure_streams.py` exposes diagnostic pressure streams and requests their rates.
+Both utilities are installed as ROS executables.
+
+Run the source regression suite after sourcing ROS:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 ROS_DOMAIN_ID=213 ROS_LOCALHOST_ONLY=1 python3 -m pytest -q src/stonefish_qut_rov/tests
+```
+
+The imported suite retains four known failures from Real_ROV: three thermal
+recovery expectations (75 C in tests versus 79.5 C in runtime), and one gimbal
+pitch-sign expectation. These disagreements were not changed during the merge.
+
 ## Architecture
 
 The high-level controller publishes vehicle-level commands on
@@ -44,6 +75,15 @@ within a simulated 3D coral reef environment:
 - Fish detection and tracking
 
 https://github.com/user-attachments/assets/ffbe256a-3c4d-401d-acdf-2d69c06081ee
+
+
+### DT and Real ROV Controls
+
+The controls are illustrated in the following figure:
+<p align="center">
+  <img src="src/stonefish_qut_rov/icons/rov_controls.png"
+       alt="SubbyROV Digital Twin to Real Vehicle System Architecture"
+       width="100%">
 
 ### Nodes
 
