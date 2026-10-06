@@ -11,6 +11,8 @@ src/mola_auv_sim/
 # Python
 __pycache__/
 *.pyc
+.dependencies/
+venv-yellow-tang/
 
 # OS/editor junk
 .DS_Store
