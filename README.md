@@ -103,8 +103,8 @@ package.
 `thruster_mixer.py` runs in **simulation only**, translating surge, heave, and
 yaw into four individual thruster commands. On the real vehicle, vehicle-level
 commands go to ArduSub RC channels and the Pixhawk's configured mixer performs
-the allocation. This project's expected SimpleROV-4 mapping is ch3 = heave,
-ch4 = yaw, and ch5 = surge; verify the actual vehicle configuration before arming.
+the allocation. This project's physical system's thruster mixer uses SimpleROV-4 which has a mapping of ch3 = heave,
+ch4 = yaw, and ch5 = surge.
 
 # Installation and running
 
