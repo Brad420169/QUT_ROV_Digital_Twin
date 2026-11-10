@@ -4,6 +4,7 @@ This ROS 2 control stack for the QUT SubbyROV underwater vehicle was built so th
 the **same controller code can drive both the Digital Twin (DT) and the real
 ROV**, accelerating autonomy development.
 
+The physical ROV documentation and design can be found: https://github.com/Heckus/SubbyROV
 This was made for the EGH490 Research Project at QUT.
 
 ## Architecture
